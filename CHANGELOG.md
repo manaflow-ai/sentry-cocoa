@@ -6,6 +6,10 @@
 
 - Only expose `experimental.dataCollection` APIs in SDK V10 (#8435)
 
+### Fixes
+
+- Prevent Session Replay network-detail breadcrumbs from blocking URLSession cancellation on the task monitor (#8355)
+
 ## 9.22.0
 
 ### Features

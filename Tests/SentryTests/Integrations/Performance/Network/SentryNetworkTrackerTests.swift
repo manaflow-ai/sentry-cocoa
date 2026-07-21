@@ -607,6 +607,83 @@ class SentryNetworkTrackerTests: XCTestCase {
     }
 
 #if os(iOS) || os(tvOS)
+    func testSetState_whenTaskMonitorHeldDuringBreadcrumb_shouldNotBlockCallingThread() {
+        // -- Arrange --
+        XCTAssertTrue(Thread.isMainThread)
+
+        let tracker = fixture.getSut()
+        let task = ContendedMonitorTaskMock(request: URLRequest(url: Self.fullUrl))
+        let releaseMonitor = DispatchSemaphore(value: 0)
+        let monitorAcquired = DispatchSemaphore(value: 0)
+        let monitorReleased = DispatchSemaphore(value: 0)
+
+        task.countOfBytesReceivedAccessed = { [weak task] in
+            guard let task else { return }
+            task.countOfBytesReceivedAccessed = nil
+            DispatchQueue.global().async {
+                task.holdMonitor(untilReleased: releaseMonitor, monitorAcquired: monitorAcquired)
+                monitorReleased.signal()
+            }
+            XCTAssertEqual(monitorAcquired.wait(timeout: .now() + 1), .success)
+        }
+
+        let releaseWatchdog = DispatchWorkItem {
+            releaseMonitor.signal()
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1, execute: releaseWatchdog)
+
+        // -- Act --
+        let start = ProcessInfo.processInfo.systemUptime
+        tracker.urlSessionTask(task, setState: .canceling)
+        let duration = ProcessInfo.processInfo.systemUptime - start
+
+        // -- Assert --
+        releaseMonitor.signal()
+        XCTAssertEqual(monitorReleased.wait(timeout: .now() + 1), .success)
+        releaseWatchdog.cancel()
+        XCTAssertLessThan(duration, 0.5, "setState blocked while another thread held the task monitor")
+    }
+
+    func testCaptureResponseDetails_whenReadingResponse_shouldNotHoldTaskMonitor() throws {
+        guard #available(iOS 16.0, tvOS 16.0, *) else { return }
+
+        // -- Arrange --
+        fixture.options.sessionReplay.networkDetailAllowUrls = ["www.domain.com"]
+        let tracker = fixture.getSut()
+        let task = ContendedMonitorTaskMock(request: URLRequest(url: Self.fullUrl))
+        tracker.urlSessionTask(task, setState: .running)
+
+        let response = try XCTUnwrap(MonitorObservingHTTPURLResponse(
+            url: Self.fullUrl,
+            statusCode: 200,
+            httpVersion: "1.1",
+            headerFields: ["Content-Type": "application/json"]
+        ))
+        let releaseMonitor = DispatchSemaphore(value: 0)
+        let monitorAcquired = DispatchSemaphore(value: 0)
+        let monitorReleased = DispatchSemaphore(value: 0)
+
+        response.headersAccessed = { [weak response] in
+            response?.headersAccessed = nil
+            DispatchQueue.global().async {
+                task.holdMonitor(untilReleased: releaseMonitor, monitorAcquired: monitorAcquired)
+                monitorReleased.signal()
+            }
+            XCTAssertEqual(
+                monitorAcquired.wait(timeout: .now() + 0.5),
+                .success,
+                "captureResponseDetails held the task monitor while reading the response"
+            )
+            releaseMonitor.signal()
+        }
+
+        // -- Act --
+        tracker.captureResponseDetails(Data(), response: response, request: Self.fullUrl, task: task)
+
+        // -- Assert --
+        XCTAssertEqual(monitorReleased.wait(timeout: .now() + 1), .success)
+    }
+
     /// Simple case - when network details are enabled, `addBreadcrumbForSessionTask` will include
     /// serialized network details in the breadcrumb data.
     func testAddBreadcrumb_withNetworkDetails_shouldIncludeSerializedDetailsInBreadcrumbData() throws {
@@ -748,6 +825,18 @@ class SentryNetworkTrackerTests: XCTestCase {
         XCTAssertEqual(parsedBody["key"] as? String, "value")
 
         clearTestState()
+    }
+
+    private final class MonitorObservingHTTPURLResponse: HTTPURLResponse, @unchecked Sendable {
+        var headersAccessed: (() -> Void)?
+
+        // Intentionally observes reading the whole header dictionary; no case-sensitive lookup.
+        // swiftlint:disable avoid_all_header_fields
+        override var allHeaderFields: [AnyHashable: Any] {
+            headersAccessed?()
+            return super.allHeaderFields
+        }
+        // swiftlint:enable avoid_all_header_fields
     }
 
     /// `HTTPURLResponse` whose `allHeaderFields` returns the exact (lowercased) casing a server

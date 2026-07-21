@@ -86,4 +86,18 @@ static int64_t const DATA_BYTES_SENT = 652;
 
 @end
 
+/**
+ * A mock that coordinates contention on the Objective-C monitor used by
+ * @synchronized(sessionTask).
+ */
+@interface ContendedMonitorTaskMock : URLSessionDataTaskMock
+
+@property (nonatomic, copy, nullable) dispatch_block_t countOfBytesReceivedAccessed;
+
+- (void)holdMonitorUntilReleased:(dispatch_semaphore_t)releaseSemaphore
+                 monitorAcquired:(dispatch_semaphore_t)monitorAcquiredSemaphore
+    NS_SWIFT_NAME(holdMonitor(untilReleased:monitorAcquired:));
+
+@end
+
 NS_ASSUME_NONNULL_END

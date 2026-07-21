@@ -325,3 +325,24 @@
 }
 
 @end
+
+@implementation ContendedMonitorTaskMock
+
+- (int64_t)countOfBytesReceived
+{
+    if (self.countOfBytesReceivedAccessed != nil) {
+        self.countOfBytesReceivedAccessed();
+    }
+    return [super countOfBytesReceived];
+}
+
+- (void)holdMonitorUntilReleased:(dispatch_semaphore_t)releaseSemaphore
+                 monitorAcquired:(dispatch_semaphore_t)monitorAcquiredSemaphore
+{
+    @synchronized(self) {
+        dispatch_semaphore_signal(monitorAcquiredSemaphore);
+        dispatch_semaphore_wait(releaseSemaphore, DISPATCH_TIME_FOREVER);
+    }
+}
+
+@end

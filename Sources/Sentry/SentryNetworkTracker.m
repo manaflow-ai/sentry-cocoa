@@ -527,14 +527,13 @@ static NSString *const SentryNetworkTrackerThreadSanitizerMessage
     }
 
 #if SENTRY_TARGET_REPLAY_SUPPORTED
-    // Check if network details was enabled for this url.
-    @synchronized(sessionTask) {
-        SentryReplayNetworkDetails *networkDetails
-            = objc_getAssociatedObject(sessionTask, &SentryNetworkDetailsKey);
-        if (networkDetails) {
-            // Store raw object; serialized at read time by SentrySRDefaultBreadcrumbConverter
-            breadcrumbData[SentryReplayNetworkDetails.replayNetworkDetailsKey] = networkDetails;
-        }
+    // Do not synchronize on sessionTask here. This method runs synchronously from the setState:
+    // swizzle, which can run on the main thread during cancellation.
+    SentryReplayNetworkDetails *networkDetails
+        = objc_getAssociatedObject(sessionTask, &SentryNetworkDetailsKey);
+    if (networkDetails) {
+        // Store raw object; serialized at read time by SentrySRDefaultBreadcrumbConverter
+        breadcrumbData[SentryReplayNetworkDetails.replayNetworkDetailsKey] = networkDetails;
     }
 #endif // SENTRY_TARGET_REPLAY_SUPPORTED
 
@@ -664,41 +663,41 @@ static const void *SentryNetworkDetailsKey = &SentryNetworkDetailsKey;
         return;
     }
 
+    SentryReplayNetworkDetails *details;
+    // Keep response processing outside this critical section so cancellation does not wait for
+    // header and body processing while trying to acquire the task monitor.
     @synchronized(task) {
-        SentryReplayNetworkDetails *details
-            = objc_getAssociatedObject(task, &SentryNetworkDetailsKey);
-        if (!details) {
-            SENTRY_LOG_WARN(@"[NetworkCapture] No SentryReplayNetworkDetails found for %@ - "
-                            @"skipping response capture",
-                urlString);
-            return;
-        }
-
-        NSInteger statusCode = 0;
-        NSDictionary *allHeaders = nil;
-        NSString *contentType = nil;
-        if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
-            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
-            statusCode = httpResponse.statusCode;
-            // sentry-lint:disable avoid_all_header_fields
-            // Safe: reading the whole dictionary, not a case-sensitive lookup.
-            allHeaders = httpResponse.allHeaderFields;
-            // sentry-lint:enable avoid_all_header_fields
-            contentType =
-                [SentryHTTPHeaderReader valueForHTTPHeaderFieldCaseInsensitive:@"content-type"
-                                                                    inResponse:httpResponse];
-        }
-
-        NSData *bodyData
-            = (options.sessionReplay.networkCaptureBodies && data.length > 0) ? data : nil;
-
-        [details setResponseWithStatusCode:statusCode
-                                      size:@(data ? data.length : 0)
-                                  bodyData:bodyData
-                               contentType:contentType
-                                allHeaders:allHeaders
-                         configuredHeaders:options.sessionReplay.networkResponseHeaders];
+        details = objc_getAssociatedObject(task, &SentryNetworkDetailsKey);
     }
+    if (!details) {
+        SENTRY_LOG_WARN(@"[NetworkCapture] No SentryReplayNetworkDetails found for %@ - "
+                        @"skipping response capture",
+            urlString);
+        return;
+    }
+
+    NSInteger statusCode = 0;
+    NSDictionary *allHeaders = nil;
+    NSString *contentType = nil;
+    if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+        statusCode = httpResponse.statusCode;
+        // sentry-lint:disable avoid_all_header_fields
+        // Safe: reading the whole dictionary, not a case-sensitive lookup.
+        allHeaders = httpResponse.allHeaderFields;
+        // sentry-lint:enable avoid_all_header_fields
+        contentType = [SentryHTTPHeaderReader valueForHTTPHeaderFieldCaseInsensitive:@"content-type"
+                                                                          inResponse:httpResponse];
+    }
+
+    NSData *bodyData = (options.sessionReplay.networkCaptureBodies && data.length > 0) ? data : nil;
+
+    [details setResponseWithStatusCode:statusCode
+                                  size:@(data ? data.length : 0)
+                              bodyData:bodyData
+                           contentType:contentType
+                            allHeaders:allHeaders
+                     configuredHeaders:options.sessionReplay.networkResponseHeaders];
 }
 
 - (void)captureRequestDetails:(NSURLSessionTask *)sessionTask
