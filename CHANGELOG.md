@@ -8,7 +8,7 @@
 
 ### Fixes
 
-- Prevent Session Replay network-detail breadcrumbs from blocking URLSession cancellation on the task monitor (#8355)
+- Prevent Session Replay network-detail breadcrumbs from blocking URLSession cancellation on the task monitor (#8497)
 
 ## 9.22.0
 
