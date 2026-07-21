@@ -17,9 +17,9 @@ enum NetworkBodyWarning: String {
 /// via `setRequest`/`setResponse`. Swift callers (SentrySRDefaultBreadcrumbConverter)
 /// consume it via `serialize()`.
 ///
-/// - Important: `setRequest` and `setResponse` can be called concurrently from
-///   `SentryNetworkTracker` because they write to independent properties.
-///   Adding shared mutable state between will require adding synchronization.
+/// - Important: Request and response parsing happens before publishing the result to the internal
+///   state. State access is nonblocking because these details are optional enrichment and must not
+///   delay URLSession callbacks or main-thread cancellation.
 
 @objc
 @_spi(Private) public class SentryReplayNetworkDetails: NSObject {
@@ -242,16 +242,32 @@ enum NetworkBodyWarning: String {
 
     // MARK: - Properties
 
-    private(set) var method: String?
-    private(set) var statusCode: NSNumber?
-    private(set) var request: Detail?
-    private(set) var response: Detail?
+    private struct State {
+        var statusCode: NSNumber?
+        var request: Detail?
+        var response: Detail?
+    }
+
+    let method: String?
+    private let state = SentryMutex(State())
+
+    private var stateSnapshot: State? {
+        state.withLockIfAvailable { $0 }
+    }
+
+    var statusCode: NSNumber? {
+        stateSnapshot?.statusCode
+    }
 
     /// Request body size in bytes, derived from request details.
-    var requestBodySize: NSNumber? { request?.size }
+    var requestBodySize: NSNumber? {
+        stateSnapshot?.request?.size
+    }
 
     /// Response body size in bytes, derived from response details.
-    var responseBodySize: NSNumber? { response?.size }
+    var responseBodySize: NSNumber? {
+        stateSnapshot?.response?.size
+    }
 
     // MARK: - Initialization
 
@@ -277,11 +293,12 @@ enum NetworkBodyWarning: String {
     ///   - configuredHeaders: Header names to extract, matched case-insensitively.
     @objc
     public func setRequest(size: NSNumber?, bodyData: Data?, contentType: String?, allHeaders: [String: Any]?, configuredHeaders: [String]?) {
-        self.request = Detail(
+        let request = Detail(
             size: size,
             body: bodyData.flatMap { Body(data: $0, contentType: contentType) },
             headers: SentryReplayNetworkDetails.extractHeaders(from: allHeaders, matching: configuredHeaders)
         )
+        state.withLockIfAvailable { $0.request = request }
     }
 
     /// Sets response details from raw body data.
@@ -298,12 +315,15 @@ enum NetworkBodyWarning: String {
     ///   - configuredHeaders: Header names to extract, matched case-insensitively.
     @objc
     public func setResponse(statusCode: Int, size: NSNumber?, bodyData: Data?, contentType: String?, allHeaders: [String: Any]?, configuredHeaders: [String]?) {
-        self.statusCode = NSNumber(value: statusCode)
-        self.response = Detail(
+        let response = Detail(
             size: size,
             body: bodyData.flatMap { Body(data: $0, contentType: contentType) },
             headers: SentryReplayNetworkDetails.extractHeaders(from: allHeaders, matching: configuredHeaders)
         )
+        state.withLockIfAvailable {
+            $0.statusCode = NSNumber(value: statusCode)
+            $0.response = response
+        }
     }
 
     // MARK: - Header Extraction
@@ -337,11 +357,16 @@ enum NetworkBodyWarning: String {
     @objc public func serialize() -> [String: Any] {
         var result = [String: Any]()
         if let method { result["method"] = method }
-        if let statusCode { result["statusCode"] = statusCode }
-        if let requestBodySize { result["requestBodySize"] = requestBodySize }
-        if let responseBodySize { result["responseBodySize"] = responseBodySize }
-        if let request { result["request"] = request.serialize() }
-        if let response { result["response"] = response.serialize() }
+
+        guard let snapshot = stateSnapshot else {
+            return result
+        }
+
+        if let statusCode = snapshot.statusCode { result["statusCode"] = statusCode }
+        if let requestBodySize = snapshot.request?.size { result["requestBodySize"] = requestBodySize }
+        if let responseBodySize = snapshot.response?.size { result["responseBodySize"] = responseBodySize }
+        if let request = snapshot.request { result["request"] = request.serialize() }
+        if let response = snapshot.response { result["response"] = response.serialize() }
         return result
     }
 

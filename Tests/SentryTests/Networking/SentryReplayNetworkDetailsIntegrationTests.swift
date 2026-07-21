@@ -84,6 +84,62 @@ class SentryReplayNetworkDetailsIntegrationTests: XCTestCase {
         assertJSONEqual(result, expectedJSON: expectedJSON)
     }
 
+    func testSerialize_withConcurrentResponseUpdates_shouldReturnConsistentSnapshot() {
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "POST")
+        details.setResponse(
+            statusCode: 0,
+            size: 0,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: nil,
+            configuredHeaders: nil
+        )
+
+        let queue = DispatchQueue(
+            label: "SentryReplayNetworkDetailsIntegrationTests",
+            attributes: .concurrent
+        )
+        let expectation = expectation(description: "Concurrent updates and serialization finish")
+        expectation.expectedFulfillmentCount = 2
+        expectation.assertForOverFulfill = true
+        let mismatches = SentryMutex(0)
+        let headers = Dictionary(uniqueKeysWithValues: (0..<100).map { ("Header-\($0)", "value") })
+        let configuredHeaders = Array(headers.keys)
+
+        // -- Act --
+        queue.async {
+            for index in 1...1_000 {
+                details.setResponse(
+                    statusCode: index,
+                    size: NSNumber(value: index),
+                    bodyData: nil,
+                    contentType: nil,
+                    allHeaders: headers,
+                    configuredHeaders: configuredHeaders
+                )
+            }
+            expectation.fulfill()
+        }
+
+        queue.async {
+            for _ in 0..<100_000 {
+                let snapshot = details.serialize()
+                let statusCode = snapshot["statusCode"] as? NSNumber
+                let response = snapshot["response"] as? [String: Any]
+                let responseSize = response?["size"] as? NSNumber
+                if statusCode != responseSize {
+                    mismatches.withLock { $0 += 1 }
+                }
+            }
+            expectation.fulfill()
+        }
+
+        // -- Assert --
+        wait(for: [expectation], timeout: 10)
+        XCTAssertEqual(mismatches.withLock { $0 }, 0)
+    }
+
     func testSerialize_withPartialData_shouldOnlyIncludeSetFields() {
         // -- Arrange --
         let details = SentryReplayNetworkDetails(method: "GET")
