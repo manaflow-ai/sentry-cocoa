@@ -74,6 +74,17 @@ import Foundation
     }
 #endif // SDK_V10
 
+#if SDK_V10
+    @objc public var networkRequestHeaders: SentryObjCReplayNetworkHeaderCapture {
+        get { SentryObjCReplayNetworkHeaderCapture(wrapped.networkRequestHeaders) }
+        set { wrapped.networkRequestHeaders = newValue.wrapped }
+    }
+
+    @objc public var networkResponseHeaders: SentryObjCReplayNetworkHeaderCapture {
+        get { SentryObjCReplayNetworkHeaderCapture(wrapped.networkResponseHeaders) }
+        set { wrapped.networkResponseHeaders = newValue.wrapped }
+    }
+#else
     @objc public var networkRequestHeaders: [String] {
         get { wrapped.networkRequestHeaders }
         set { wrapped.networkRequestHeaders = newValue }
@@ -83,6 +94,7 @@ import Foundation
         get { wrapped.networkResponseHeaders }
         set { wrapped.networkResponseHeaders = newValue }
     }
+#endif // SDK_V10
 
     @objc public func excludeViewTypeFromSubtreeTraversal(_ viewType: String) {
         wrapped.excludeViewTypeFromSubtreeTraversal(viewType)

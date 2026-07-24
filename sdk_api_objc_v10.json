@@ -176,6 +176,16 @@
   },
   {
     "kind": "EnumConstantDecl",
+    "name": "SentryObjCReplayNetworkHeaderCaptureModeHeaders",
+    "parent": "SentryObjCReplayNetworkHeaderCaptureMode"
+  },
+  {
+    "kind": "EnumConstantDecl",
+    "name": "SentryObjCReplayNetworkHeaderCaptureModeInherit",
+    "parent": "SentryObjCReplayNetworkHeaderCaptureMode"
+  },
+  {
+    "kind": "EnumConstantDecl",
     "name": "SentryObjCReplayQualityHigh",
     "parent": "SentryObjCReplayQuality"
   },
@@ -374,6 +384,10 @@
   {
     "kind": "EnumDecl",
     "name": "SentryObjCReplayNetworkBodyCapture"
+  },
+  {
+    "kind": "EnumDecl",
+    "name": "SentryObjCReplayNetworkHeaderCaptureMode"
   },
   {
     "kind": "EnumDecl",
@@ -692,6 +706,12 @@
   {
     "kind": "ObjCInterfaceDecl",
     "name": "SentryObjCReplayApi",
+    "super": "NSObject",
+    "has_inner": true
+  },
+  {
+    "kind": "ObjCInterfaceDecl",
+    "name": "SentryObjCReplayNetworkHeaderCapture",
     "super": "NSObject",
     "has_inner": true
   },
@@ -2709,9 +2729,23 @@
   {
     "kind": "ObjCMethodDecl",
     "name": "headers",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
+    "returnType": "NSArray<NSString *> * _Nonnull",
+    "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "headers",
     "parent": "SentryObjCRequest",
     "returnType": "NSDictionary<NSString *,NSString *> * _Nullable",
     "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "headers:",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
+    "returnType": "instancetype _Nonnull",
+    "instance": false
   },
   {
     "kind": "ObjCMethodDecl",
@@ -2873,6 +2907,13 @@
     "parent": "SentryObjCLogger",
     "returnType": "void",
     "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "inherit",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
+    "returnType": "instancetype _Nonnull",
+    "instance": false
   },
   {
     "kind": "ObjCMethodDecl",
@@ -3193,6 +3234,13 @@
     "kind": "ObjCMethodDecl",
     "name": "init",
     "parent": "SentryObjCReplayApi",
+    "returnType": "instancetype _Nonnull",
+    "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "init",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
     "returnType": "instancetype _Nonnull",
     "instance": true
   },
@@ -4248,6 +4296,13 @@
   },
   {
     "kind": "ObjCMethodDecl",
+    "name": "mode",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
+    "returnType": "SentryObjCReplayNetworkHeaderCaptureMode",
+    "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
     "name": "module",
     "parent": "SentryObjCException",
     "returnType": "NSString * _Nullable",
@@ -4362,14 +4417,14 @@
     "kind": "ObjCMethodDecl",
     "name": "networkRequestHeaders",
     "parent": "SentryObjCReplayOptions",
-    "returnType": "NSArray<NSString *> * _Nonnull",
+    "returnType": "SentryObjCReplayNetworkHeaderCapture * _Nonnull",
     "instance": true
   },
   {
     "kind": "ObjCMethodDecl",
     "name": "networkResponseHeaders",
     "parent": "SentryObjCReplayOptions",
-    "returnType": "NSArray<NSString *> * _Nonnull",
+    "returnType": "SentryObjCReplayNetworkHeaderCapture * _Nonnull",
     "instance": true
   },
   {
@@ -4614,6 +4669,13 @@
     "kind": "ObjCMethodDecl",
     "name": "new",
     "parent": "SentryObjCReplayApi",
+    "returnType": "instancetype _Nonnull",
+    "instance": false
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "new",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
     "returnType": "instancetype _Nonnull",
     "instance": false
   },
@@ -9587,6 +9649,12 @@
   {
     "kind": "ObjCPropertyDecl",
     "name": "headers",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
+    "type": "NSArray<NSString *> * _Nonnull"
+  },
+  {
+    "kind": "ObjCPropertyDecl",
+    "name": "headers",
     "parent": "SentryObjCRequest",
     "type": "NSDictionary<NSString *,NSString *> * _Nullable"
   },
@@ -10072,6 +10140,12 @@
   },
   {
     "kind": "ObjCPropertyDecl",
+    "name": "mode",
+    "parent": "SentryObjCReplayNetworkHeaderCapture",
+    "type": "SentryObjCReplayNetworkHeaderCaptureMode"
+  },
+  {
+    "kind": "ObjCPropertyDecl",
     "name": "module",
     "parent": "SentryObjCException",
     "type": "NSString * _Nullable"
@@ -10170,13 +10244,13 @@
     "kind": "ObjCPropertyDecl",
     "name": "networkRequestHeaders",
     "parent": "SentryObjCReplayOptions",
-    "type": "NSArray<NSString *> * _Nonnull"
+    "type": "SentryObjCReplayNetworkHeaderCapture * _Nonnull"
   },
   {
     "kind": "ObjCPropertyDecl",
     "name": "networkResponseHeaders",
     "parent": "SentryObjCReplayOptions",
-    "type": "NSArray<NSString *> * _Nonnull"
+    "type": "SentryObjCReplayNetworkHeaderCapture * _Nonnull"
   },
   {
     "kind": "ObjCPropertyDecl",
@@ -11338,6 +11412,11 @@
     "kind": "TypedefDecl",
     "name": "SentryObjCReplayNetworkBodyCapture",
     "type": "enum SentryObjCReplayNetworkBodyCapture"
+  },
+  {
+    "kind": "TypedefDecl",
+    "name": "SentryObjCReplayNetworkHeaderCaptureMode",
+    "type": "enum SentryObjCReplayNetworkHeaderCaptureMode"
   },
   {
     "kind": "TypedefDecl",

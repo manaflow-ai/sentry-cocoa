@@ -45,11 +45,13 @@ final class SentryRRWebOptionsEvent: SentryRRWebCustomEvent {
             }
 #if SDK_V10
             payload["networkCaptureBodies"] = options.networkCaptureBodies.serializedValue
+            payload["networkRequestHeaders"] = options.networkRequestHeaders.serializedValue
+            payload["networkResponseHeaders"] = options.networkResponseHeaders.serializedValue
 #else
             payload["networkCaptureBodies"] = options.networkCaptureBodies
-#endif // SDK_V10
             payload["networkRequestHeaders"] = options.networkRequestHeaders
             payload["networkResponseHeaders"] = options.networkResponseHeaders
+#endif // SDK_V10
         }
 
         super.init(timestamp: timestamp, tag: "options", payload: payload)

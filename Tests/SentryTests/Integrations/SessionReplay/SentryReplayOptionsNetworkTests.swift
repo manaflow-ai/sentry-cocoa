@@ -65,32 +65,35 @@ class SentryReplayOptionsNetworkTests: XCTestCase {
     // MARK: - Network Details Headers Tests
     
     func testNetworkHeaders_withVariousConfigurations_shouldHandleCorrectly() {
-        let expectedDefaultHeaders = ["Content-Type", "Content-Length", "Accept"]
-        
-        // Test 1: Default configuration (empty dict)
+        let customRequestHeaders = ["Authorization", "User-Agent", "X-Custom-Header", "Accept-Language"]
+        let customResponseHeaders = ["Cache-Control", "Set-Cookie", "X-Rate-Limit-Remaining", "Server"]
+
         let defaultOptions = SentryReplayOptions(dictionary: [:])
-        XCTAssertEqual(defaultOptions.networkRequestHeaders, expectedDefaultHeaders)
-        XCTAssertEqual(defaultOptions.networkResponseHeaders, expectedDefaultHeaders)
-        
-        // Test 2: Empty arrays should return defaults
         let emptyOptions = SentryReplayOptions(dictionary: [
             "networkRequestHeaders": [],
             "networkResponseHeaders": []
         ])
-        XCTAssertEqual(emptyOptions.networkRequestHeaders, expectedDefaultHeaders)
-        XCTAssertEqual(emptyOptions.networkResponseHeaders, expectedDefaultHeaders)
-        
-        // Test 3: Custom headers should be merged with defaults
-        let customRequestHeaders = ["Authorization", "User-Agent", "X-Custom-Header", "Accept-Language"]
-        let customResponseHeaders = ["Cache-Control", "Set-Cookie", "X-Rate-Limit-Remaining", "Server"]
-        let expectedMergedRequestHeaders = ["Content-Type", "Content-Length", "Accept", "Authorization", "User-Agent", "X-Custom-Header", "Accept-Language"]
-        let expectedMergedResponseHeaders = ["Content-Type", "Content-Length", "Accept", "Cache-Control", "Set-Cookie", "X-Rate-Limit-Remaining", "Server"]
         let customOptions = SentryReplayOptions(dictionary: [
             "networkRequestHeaders": customRequestHeaders,
             "networkResponseHeaders": customResponseHeaders
         ])
-        XCTAssertEqual(customOptions.networkRequestHeaders, expectedMergedRequestHeaders)
-        XCTAssertEqual(customOptions.networkResponseHeaders, expectedMergedResponseHeaders)
+
+#if SDK_V10
+        XCTAssertEqual(defaultOptions.networkRequestHeaders, .inherit)
+        XCTAssertEqual(defaultOptions.networkResponseHeaders, .inherit)
+        XCTAssertEqual(emptyOptions.networkRequestHeaders, .headers([]))
+        XCTAssertEqual(emptyOptions.networkResponseHeaders, .headers([]))
+        XCTAssertEqual(customOptions.networkRequestHeaders, .headers(customRequestHeaders))
+        XCTAssertEqual(customOptions.networkResponseHeaders, .headers(customResponseHeaders))
+#else
+        let expectedDefaultHeaders = ["Content-Type", "Content-Length", "Accept"]
+        XCTAssertEqual(defaultOptions.networkRequestHeaders, expectedDefaultHeaders)
+        XCTAssertEqual(defaultOptions.networkResponseHeaders, expectedDefaultHeaders)
+        XCTAssertEqual(emptyOptions.networkRequestHeaders, expectedDefaultHeaders)
+        XCTAssertEqual(emptyOptions.networkResponseHeaders, expectedDefaultHeaders)
+        XCTAssertEqual(customOptions.networkRequestHeaders, expectedDefaultHeaders + customRequestHeaders)
+        XCTAssertEqual(customOptions.networkResponseHeaders, expectedDefaultHeaders + customResponseHeaders)
+#endif
     }
     
     func testNetworkHeaders_withVariousCases_shouldDeduplicateCaseInsensitively() {
@@ -120,37 +123,17 @@ class SentryReplayOptionsNetworkTests: XCTestCase {
         let options = SentryReplayOptions(dictionary: dict)
         
         // -- Assert --
-        // Request headers: defaults + deduplicated user headers (case preserved from first occurrence)
-        // Expected: "Content-Type", "Content-Length", "Accept" (defaults), "Accept-Encoding", "x-api-key"
-        let expectedRequestCount = 5
-        XCTAssertEqual(options.networkRequestHeaders.count, expectedRequestCount, 
-                      "Request headers should be deduplicated, got: \(options.networkRequestHeaders)")
-        
-        // Check that each header appears exactly once (case-insensitive check)
-        let expectedRequestHeadersLowercase = ["content-type", "content-length", "accept", "accept-encoding", "x-api-key"]
-        for expectedHeader in expectedRequestHeadersLowercase {
-            let matchingHeaders = options.networkRequestHeaders.filter { 
-                $0.lowercased() == expectedHeader
-            }
-            XCTAssertEqual(matchingHeaders.count, 1, 
-                          "Header '\(expectedHeader)' should appear exactly once, but found: \(matchingHeaders)")
-        }
-        
-        // Response headers: defaults + deduplicated user headers (case preserved from first occurrence)
-        // Expected: "Content-Type", "Content-Length", "Accept" (defaults), "server", "CACHE-CONTROL", "Set-Cookie", "x-rate-limit"
-        let expectedResponseCount = 7
-        XCTAssertEqual(options.networkResponseHeaders.count, expectedResponseCount,
-                      "Response headers should be deduplicated, got: \(options.networkResponseHeaders)")
-        
-        // Check that each header appears exactly once (case-insensitive check)
-        let expectedResponseHeadersLowercase = ["content-type", "content-length", "accept", "server", "cache-control", "set-cookie", "x-rate-limit"]
-        for expectedHeader in expectedResponseHeadersLowercase {
-            let matchingHeaders = options.networkResponseHeaders.filter { 
-                $0.lowercased() == expectedHeader
-            }
-            XCTAssertEqual(matchingHeaders.count, 1, 
-                          "Header '\(expectedHeader)' should appear exactly once, but found: \(matchingHeaders)")
-        }
+#if SDK_V10
+        XCTAssertEqual(options.networkRequestHeaders, .headers(requestHeaders))
+        XCTAssertEqual(options.networkResponseHeaders, .headers(responseHeaders))
+#else
+        XCTAssertEqual(options.networkRequestHeaders, [
+            "Content-Type", "Content-Length", "Accept", "Accept-Encoding", "x-api-key"
+        ])
+        XCTAssertEqual(options.networkResponseHeaders, [
+            "Content-Type", "Content-Length", "Accept", "server", "CACHE-CONTROL", "Set-Cookie", "x-rate-limit"
+        ])
+#endif
     }
     
     // MARK: - Invalid networkDetailUrls Removal Tests
@@ -393,7 +376,7 @@ class SentryReplayOptionsNetworkTests: XCTestCase {
     
     // MARK: - Header Configuration Tests
     
-    func testNetworkHeaders_withCustomHeaders_shouldAlwaysIncludeDefaultHeaders() {
+    func testNetworkHeaders_withCustomHeaders_shouldUseVersionSpecificSelection() {
         // -- Arrange --
         let customRequestHeaders = ["Authorization", "X-API-Key"]
         let customResponseHeaders = ["Cache-Control", "X-Rate-Limit"]
@@ -406,27 +389,13 @@ class SentryReplayOptionsNetworkTests: XCTestCase {
         let options = SentryReplayOptions(dictionary: dict)
         
         // -- Assert --
-        let expectedDefaults = ["Content-Type", "Content-Length", "Accept"]
-        
-        // Request headers should include both defaults and custom headers
-        for defaultHeader in expectedDefaults {
-            XCTAssertTrue(options.networkRequestHeaders.contains(defaultHeader), 
-                         "Default header '\(defaultHeader)' should always be included in request headers")
-        }
-        for customHeader in customRequestHeaders {
-            XCTAssertTrue(options.networkRequestHeaders.contains(customHeader), 
-                         "Custom header '\(customHeader)' should be included in request headers")
-        }
-        
-        // Response headers should include both defaults and custom headers
-        for defaultHeader in expectedDefaults {
-            XCTAssertTrue(options.networkResponseHeaders.contains(defaultHeader), 
-                         "Default header '\(defaultHeader)' should always be included in response headers")
-        }
-        for customHeader in customResponseHeaders {
-            XCTAssertTrue(options.networkResponseHeaders.contains(customHeader), 
-                         "Custom header '\(customHeader)' should be included in response headers")
-        }
+#if SDK_V10
+        XCTAssertEqual(options.networkRequestHeaders, .headers(customRequestHeaders))
+        XCTAssertEqual(options.networkResponseHeaders, .headers(customResponseHeaders))
+#else
+        XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept"] + customRequestHeaders)
+        XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept"] + customResponseHeaders)
+#endif
     }
     
     func testNetworkHeaders_withCaseInsensitiveDuplicates_shouldPreventDuplicateHeaders() {
@@ -446,17 +415,12 @@ class SentryReplayOptionsNetworkTests: XCTestCase {
         let options = SentryReplayOptions(dictionary: dict)
         
         // -- Assert --
-        // Should have only unique headers (case-insensitive)
-        let expectedHeaders = ["Content-Type", "Content-Length", "Accept", "Authorization"]
-        XCTAssertEqual(options.networkRequestHeaders.count, expectedHeaders.count)
-        
-        // Verify each expected header appears exactly once (case-insensitive check)
-        for expectedHeader in expectedHeaders {
-            let matchingHeaders = options.networkRequestHeaders.filter { 
-                $0.lowercased() == expectedHeader.lowercased() 
-            }
-            XCTAssertEqual(matchingHeaders.count, 1, 
-                          "Header '\(expectedHeader)' should appear exactly once, but found: \(matchingHeaders)")
-        }
+#if SDK_V10
+        XCTAssertEqual(options.networkRequestHeaders, .headers(headersWithDuplicates))
+#else
+        XCTAssertEqual(options.networkRequestHeaders, [
+            "Content-Type", "Content-Length", "Accept", "Authorization"
+        ])
+#endif
     }
 }

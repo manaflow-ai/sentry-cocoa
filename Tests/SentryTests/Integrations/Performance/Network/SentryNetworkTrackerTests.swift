@@ -602,11 +602,12 @@ class SentryNetworkTrackerTests: XCTestCase {
         let options = Options()
         options.dsn = "https://key@sentry.io/1234"
         options.sessionReplay.networkDetailAllowUrls = ["api.example.com"]
-        options.sessionReplay.networkResponseHeaders = ["Cache-Control"]
 #if SDK_V10
         options.sessionReplay.networkCaptureBodies = .disabled
+        options.sessionReplay.networkResponseHeaders = .headers(["Cache-Control"])
 #else
         options.sessionReplay.networkCaptureBodies = false
+        options.sessionReplay.networkResponseHeaders = ["Cache-Control"]
 #endif
 
         let scope = Scope()
@@ -667,10 +668,13 @@ class SentryNetworkTrackerTests: XCTestCase {
         // Verify response details show up
         let responseDict = try XCTUnwrap(networkDetails["response"] as? [String: Any])
         let responseHeaders = try XCTUnwrap(responseDict["headers"] as? [String: String])
-        // "Content-Type" is always extracted when present.
+#if SDK_V10
+        XCTAssertEqual(responseHeaders, ["Cache-Control": "no-cache"])
+#else
         XCTAssertEqual(responseHeaders["Content-Type"], "application/json")
         XCTAssertEqual(responseHeaders["Cache-Control"], "no-cache")
         XCTAssertEqual(responseHeaders.count, 2, "Only Content-Type and the configured Cache-Control should be captured")
+#endif
 
         clearTestState()
     }

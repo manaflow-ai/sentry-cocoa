@@ -33,8 +33,13 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
 #else
         public static let networkCaptureBodies: Bool = true
 #endif // SDK_V10
+#if SDK_V10
+        public static let networkRequestHeaders: NetworkHeaderCapture = .inherit
+        public static let networkResponseHeaders: NetworkHeaderCapture = .inherit
+#else
         public static let networkRequestHeaders: [String] = ["Content-Type", "Content-Length", "Accept"]
         public static let networkResponseHeaders: [String] = ["Content-Type", "Content-Length", "Accept"]
+#endif // SDK_V10
 
         // The following properties are defaults which are not configurable by the user.
 
@@ -113,6 +118,21 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
     }
 
 #if SDK_V10
+    /// Controls whether Session Replay captures HTTP request and response headers.
+    public enum NetworkHeaderCapture: Equatable {
+        /// Inherit header and cookie collection from `dataCollection`.
+        case inherit
+        /// Capture only the listed headers, while always filtering sensitive values.
+        case headers([String])
+
+        var serializedValue: Any {
+            switch self {
+            case .inherit: return "inherit"
+            case .headers(let headers): return headers
+            }
+        }
+    }
+
     /// Controls whether Session Replay captures HTTP request and response bodies.
     public enum NetworkBodyCapture {
         /// Inherit request and response body capture from `dataCollection.httpBodies`.
@@ -413,22 +433,24 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
     public var networkCaptureBodies: Bool
 #endif // SDK_V10
 
+#if SDK_V10
     /**
      * Request headers to capture for allowed URLs during session replay.
      *
-     * Specifies which HTTP request headers should be captured and included in session replay
-     * network details. Header matching is case-insensitive (e.g., "content-type", "Content-Type",
-     * and "CoNtEnT-tYpE" are all equivalent).
+     * The default ``NetworkHeaderCapture/inherit`` value follows
+     * `dataCollection.httpHeaders.request` and `dataCollection.cookies`. An explicit
+     * ``NetworkHeaderCapture/headers(_:)`` value overrides global header selection, while
+     * mandatory sensitive-value filtering remains active.
      *
-     * Default (always included): `["Content-Type", "Content-Length", "Accept"]`
+     * - Note: This setting only applies when ``networkDetailAllowUrls`` is non-empty.
+     */
+    @nonobjc public var networkRequestHeaders: NetworkHeaderCapture
+#else
+    /**
+     * Request headers to capture for allowed URLs during session replay.
      *
-     * Example:
-     * ```
-     * options.sessionReplay.networkRequestHeaders = [
-     *     "Authorization",
-     *     "User-Agent"
-     * ]
-     * ```
+     * Header matching is case-insensitive. The default headers are
+     * `["Content-Type", "Content-Length", "Accept"]` and are always included.
      *
      * - Note: This setting only applies when ``networkDetailAllowUrls`` is non-empty.
      * - Note: Header names preserve the case seen on the request, not the case specified here.
@@ -438,23 +460,26 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
         set { _networkRequestHeaders = Self.mergeWithDefaultHeaders(newValue, defaults: DefaultValues.networkRequestHeaders) }
     }
     private var _networkRequestHeaders: [String]
+#endif // SDK_V10
 
+#if SDK_V10
     /**
      * Response headers to capture for allowed URLs during session replay.
      *
-     * Specifies which HTTP response headers should be captured and included in session replay
-     * network details. Header matching is case-insensitive (e.g., "content-type", "Content-Type",
-     * and "CoNtEnT-tYpE" are all equivalent).
+     * The default ``NetworkHeaderCapture/inherit`` value follows
+     * `dataCollection.httpHeaders.response` and `dataCollection.cookies`. An explicit
+     * ``NetworkHeaderCapture/headers(_:)`` value overrides global header selection, while
+     * mandatory sensitive-value filtering remains active.
      *
-     * Default (always included): `["Content-Type", "Content-Length", "Accept"]`
+     * - Note: This setting only applies when ``networkDetailAllowUrls`` is non-empty.
+     */
+    @nonobjc public var networkResponseHeaders: NetworkHeaderCapture
+#else
+    /**
+     * Response headers to capture for allowed URLs during session replay.
      *
-     * Example:
-     * ```
-     * options.sessionReplay.networkResponseHeaders = [
-     *     "Cache-Control",    // Custom header
-     *     "Set-Cookie"        // Custom header
-     * ]
-     * ```
+     * Header matching is case-insensitive. The default headers are
+     * `["Content-Type", "Content-Length", "Accept"]` and are always included.
      *
      * - Note: This setting only applies when ``networkDetailAllowUrls`` is non-empty.
      * - Note: Header names preserve the case seen on the response, not the case specified here.
@@ -464,6 +489,7 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
         set { _networkResponseHeaders = Self.mergeWithDefaultHeaders(newValue, defaults: DefaultValues.networkResponseHeaders) }
     }
     private var _networkResponseHeaders: [String]
+#endif // SDK_V10
 
     /**
      * Defines the quality of the session replay.
@@ -748,8 +774,13 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
 #else
         self.networkCaptureBodies = networkCaptureBodies ?? DefaultValues.networkCaptureBodies
 #endif // SDK_V10
+#if SDK_V10
+        self.networkRequestHeaders = networkRequestHeaders.map { .headers($0) } ?? .inherit
+        self.networkResponseHeaders = networkResponseHeaders.map { .headers($0) } ?? .inherit
+#else
         self._networkRequestHeaders = Self.mergeWithDefaultHeaders(networkRequestHeaders, defaults: DefaultValues.networkRequestHeaders)
         self._networkResponseHeaders = Self.mergeWithDefaultHeaders(networkResponseHeaders, defaults: DefaultValues.networkResponseHeaders)
+#endif // SDK_V10
 
         super.init()
     }

@@ -72,6 +72,181 @@ class SentryReplayNetworkDetailsHeaderTests: XCTestCase {
         XCTAssertEqual(extracted["X-Double"], "3.14159")
     }
 
+    func testSetRequest_whenHeaderCaptureInherits_shouldUseRequestBehavior() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "GET")
+        let dataCollection = SentryDataCollection.Options(
+            httpHeaders: .init(
+                request: .allowList(terms: ["request-id"]),
+                response: .off
+            )
+        )
+
+        // -- Act --
+        details.setRequest(
+            size: nil,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: [
+                "Content-Type": "application/json",
+                "X-Auth-Token": "secret-token",
+                "X-Request-Id": "request-id"
+            ],
+            headerCapture: .inherit,
+            dataCollection: dataCollection
+        )
+
+        // -- Assert --
+        XCTAssertEqual(details.request?.headers, [
+            "Content-Type": "[Filtered]",
+            "X-Auth-Token": "[Filtered]",
+            "X-Request-Id": "request-id"
+        ])
+#endif
+    }
+
+    func testSetResponse_whenHeaderCaptureInherits_shouldUseResponseBehaviorIndependently() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "GET")
+        let dataCollection = SentryDataCollection.Options(
+            httpHeaders: .init(
+                request: .allowList(terms: ["request-id"]),
+                response: .off
+            )
+        )
+
+        // -- Act --
+        details.setResponse(
+            statusCode: 200,
+            size: nil,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: ["X-Response-Id": "response-id"],
+            headerCapture: .inherit,
+            dataCollection: dataCollection
+        )
+
+        // -- Assert --
+        XCTAssertEqual(details.response?.headers, [:])
+#endif
+    }
+
+    func testSetRequest_whenHeaderCaptureOverridesGlobalOff_shouldSelectHeadersAndFilterSensitiveValues() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "GET")
+        let dataCollection = SentryDataCollection.Options(
+            httpHeaders: .init(request: .off, response: .off)
+        )
+
+        // -- Act --
+        details.setRequest(
+            size: nil,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: [
+                "Authorization": "Bearer secret",
+                "X-Request-Id": "request-id",
+                "X-Unselected": "unselected"
+            ],
+            headerCapture: .headers(["Authorization", "X-Request-Id"]),
+            dataCollection: dataCollection
+        )
+
+        // -- Assert --
+        XCTAssertEqual(details.request?.headers, [
+            "Authorization": "[Filtered]",
+            "X-Request-Id": "request-id"
+        ])
+#endif
+    }
+
+    func testSetRequest_whenCookiesAreInherited_shouldParseAndFilterCookieValues() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "GET")
+        let dataCollection = SentryDataCollection.Options(
+            cookies: .denyList(),
+            httpHeaders: .init(request: .off, response: .off)
+        )
+
+        // -- Act --
+        details.setRequest(
+            size: nil,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: ["Cookie": "theme=dark; session=secret"],
+            headerCapture: .inherit,
+            dataCollection: dataCollection
+        )
+
+        // -- Assert --
+        XCTAssertEqual(details.request?.headers, [:])
+        XCTAssertEqual(details.request?.cookies, [
+            "session": "[Filtered]",
+            "theme": "dark"
+        ])
+#endif
+    }
+
+    func testSetResponse_whenCookieCannotBeParsed_shouldUseFilteredHeaderFallback() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "GET")
+
+        // -- Act --
+        details.setResponse(
+            statusCode: 200,
+            size: nil,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: ["Set-Cookie": "opaque-cookie"],
+            headerCapture: .inherit,
+            dataCollection: SentryDataCollection.Options()
+        )
+
+        // -- Assert --
+        XCTAssertEqual(details.response?.headers, ["Set-Cookie": "[Filtered]"])
+        XCTAssertEqual(details.response?.cookies, [:])
+#endif
+    }
+
+    func testSetRequest_whenCookieCollectionIsOff_shouldOmitCookies() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let details = SentryReplayNetworkDetails(method: "GET")
+        let dataCollection = SentryDataCollection.Options(cookies: .off)
+
+        // -- Act --
+        details.setRequest(
+            size: nil,
+            bodyData: nil,
+            contentType: nil,
+            allHeaders: ["Cookie": "theme=dark"],
+            headerCapture: .inherit,
+            dataCollection: dataCollection
+        )
+
+        // -- Assert --
+        XCTAssertEqual(details.request?.headers, [:])
+        XCTAssertEqual(details.request?.cookies, [:])
+#endif
+    }
+
     func testExtractHeaders_unconfiguredHeadersAreExcluded() {
         // -- Arrange --
         let sourceHeaders: [String: Any] = [

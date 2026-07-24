@@ -129,10 +129,24 @@
     },
     {
       "kind": "ObjCMethodDecl",
+      "name": "headers:",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "returnType": "instancetype _Nonnull",
+      "instance": false
+    },
+    {
+      "kind": "ObjCMethodDecl",
       "name": "httpBodies",
       "parent": "SentryObjCDataCollectionOptions",
       "returnType": "SentryObjCDataCollectionHttpBodyType",
       "instance": true
+    },
+    {
+      "kind": "ObjCMethodDecl",
+      "name": "inherit",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "returnType": "instancetype _Nonnull",
+      "instance": false
     },
     {
       "kind": "ObjCMethodDecl",
@@ -181,6 +195,13 @@
       "name": "mode",
       "parent": "SentryObjCDataCollectionKeyValueCollectionBehavior",
       "returnType": "SentryObjCDataCollectionKeyValueCollectionMode",
+      "instance": true
+    },
+    {
+      "kind": "ObjCMethodDecl",
+      "name": "mode",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "returnType": "SentryObjCReplayNetworkHeaderCaptureMode",
       "instance": true
     },
     {
@@ -328,6 +349,12 @@
       "name": "mode",
       "parent": "SentryObjCDataCollectionKeyValueCollectionBehavior",
       "type": "SentryObjCDataCollectionKeyValueCollectionMode"
+    },
+    {
+      "kind": "ObjCPropertyDecl",
+      "name": "mode",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "type": "SentryObjCReplayNetworkHeaderCaptureMode"
     },
     {
       "kind": "ObjCPropertyDecl",
@@ -508,10 +535,24 @@
     },
     {
       "kind": "ObjCMethodDecl",
+      "name": "headers:",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "returnType": "SentryObjCReplayNetworkHeaderCapture * _Nonnull",
+      "instance": false
+    },
+    {
+      "kind": "ObjCMethodDecl",
       "name": "httpBodies",
       "parent": "SentryObjCDataCollectionOptions",
       "returnType": "NSUInteger",
       "instance": true
+    },
+    {
+      "kind": "ObjCMethodDecl",
+      "name": "inherit",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "returnType": "SentryObjCReplayNetworkHeaderCapture * _Nonnull",
+      "instance": false
     },
     {
       "kind": "ObjCMethodDecl",
@@ -630,6 +671,13 @@
       "name": "mode",
       "parent": "SentryObjCDataCollectionKeyValueCollectionBehavior",
       "returnType": "enum SentryObjCDataCollectionKeyValueCollectionMode",
+      "instance": true
+    },
+    {
+      "kind": "ObjCMethodDecl",
+      "name": "mode",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "returnType": "enum SentryObjCReplayNetworkHeaderCaptureMode",
       "instance": true
     },
     {
@@ -791,6 +839,12 @@
       "name": "mode",
       "parent": "SentryObjCDataCollectionKeyValueCollectionBehavior",
       "type": "enum SentryObjCDataCollectionKeyValueCollectionMode"
+    },
+    {
+      "kind": "ObjCPropertyDecl",
+      "name": "mode",
+      "parent": "SentryObjCReplayNetworkHeaderCapture",
+      "type": "enum SentryObjCReplayNetworkHeaderCaptureMode"
     },
     {
       "kind": "ObjCPropertyDecl",

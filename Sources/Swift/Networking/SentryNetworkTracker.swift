@@ -302,6 +302,17 @@ final class SentryDefaultNetworkTracker<Dependencies: SentryDefaultNetworkTracke
 #endif // SDK_V10
             let bodyData = shouldCaptureBody && !data.isEmpty ? data : nil
 
+#if SDK_V10
+            details.setResponse(
+                statusCode: statusCode,
+                size: NSNumber(value: data.count),
+                bodyData: bodyData,
+                contentType: contentType,
+                allHeaders: allHeaders,
+                headerCapture: options.sessionReplay.networkResponseHeaders,
+                dataCollection: options.dataCollection
+            )
+#else
             details.setResponse(
                 statusCode: statusCode,
                 size: NSNumber(value: data.count),
@@ -310,6 +321,7 @@ final class SentryDefaultNetworkTracker<Dependencies: SentryDefaultNetworkTracke
                 allHeaders: allHeaders,
                 configuredHeaders: options.sessionReplay.networkResponseHeaders
             )
+#endif // SDK_V10
         }
     }
     #endif
@@ -581,6 +593,28 @@ final class SentryDefaultNetworkTracker<Dependencies: SentryDefaultNetworkTracke
         options.sessionReplay.isNetworkDetailCaptureEnabled(for: urlString)
     }
 
+#if SDK_V10
+    private func captureRequestDetails(
+        for sessionTask: URLSessionTask,
+        networkCaptureBodies: Bool,
+        networkRequestHeaders: SentryReplayOptions.NetworkHeaderCapture
+    ) {
+        guard let request = sessionTask.currentRequest else {
+            return
+        }
+
+        let details = networkDetails(for: sessionTask, request: request)
+        let rawBody = sessionTask.originalRequest?.httpBody ?? request.httpBody
+        details.setRequest(
+            size: rawBody.map { NSNumber(value: $0.count) },
+            bodyData: networkCaptureBodies ? rawBody : nil,
+            contentType: request.value(forHTTPHeaderField: "content-type"),
+            allHeaders: request.allHTTPHeaderFields,
+            headerCapture: networkRequestHeaders,
+            dataCollection: hub.options.dataCollection
+        )
+    }
+#else
     private func captureRequestDetails(
         for sessionTask: URLSessionTask,
         networkCaptureBodies: Bool,
@@ -590,7 +624,23 @@ final class SentryDefaultNetworkTracker<Dependencies: SentryDefaultNetworkTracke
             return
         }
 
-        let details: SentryReplayNetworkDetails = synchronized(sessionTask) {
+        let details = networkDetails(for: sessionTask, request: request)
+        let rawBody = sessionTask.originalRequest?.httpBody ?? request.httpBody
+        details.setRequest(
+            size: rawBody.map { NSNumber(value: $0.count) },
+            bodyData: networkCaptureBodies ? rawBody : nil,
+            contentType: request.value(forHTTPHeaderField: "content-type"),
+            allHeaders: request.allHTTPHeaderFields,
+            configuredHeaders: networkRequestHeaders
+        )
+    }
+#endif // SDK_V10
+
+    private func networkDetails(
+        for sessionTask: URLSessionTask,
+        request: URLRequest
+    ) -> SentryReplayNetworkDetails {
+        synchronized(sessionTask) {
             if case .valid(let existingDetails) = sessionTask.networkDetails {
                 return existingDetails
             }
@@ -599,17 +649,6 @@ final class SentryDefaultNetworkTracker<Dependencies: SentryDefaultNetworkTracke
             sessionTask.setNetworkDetails(newDetails)
             return newDetails
         }
-
-        let rawBody = sessionTask.originalRequest?.httpBody ?? request.httpBody
-        let requestSize = rawBody.map { NSNumber(value: $0.count) }
-
-        details.setRequest(
-            size: requestSize,
-            bodyData: networkCaptureBodies ? rawBody : nil,
-            contentType: request.value(forHTTPHeaderField: "content-type"),
-            allHeaders: request.allHTTPHeaderFields,
-            configuredHeaders: networkRequestHeaders
-        )
     }
     #endif
 

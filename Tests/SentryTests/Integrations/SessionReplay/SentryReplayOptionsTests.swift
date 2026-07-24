@@ -31,11 +31,43 @@ class SentryReplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.networkDetailDenyUrls.count, 0)
 #if SDK_V10
         XCTAssertEqual(options.networkCaptureBodies, .inherit)
+        XCTAssertEqual(options.networkRequestHeaders, .inherit)
+        XCTAssertEqual(options.networkResponseHeaders, .inherit)
 #else
         XCTAssertTrue(options.networkCaptureBodies)
-#endif
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept"])
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept"])
+#endif
+    }
+
+    func testNetworkHeaderCapture_whenDefault_shouldInherit() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange & Act --
+        let options = SentryReplayOptions()
+
+        // -- Assert --
+        XCTAssertEqual(options.networkRequestHeaders, .inherit)
+        XCTAssertEqual(options.networkResponseHeaders, .inherit)
+#endif
+    }
+
+    func testNetworkHeaderCapture_whenHeadersConfigured_shouldPreserveExactSelection() throws {
+#if !SDK_V10
+        throw XCTSkip("Test skipped for SDK_V10")
+#else
+        // -- Arrange --
+        let options = SentryReplayOptions()
+
+        // -- Act --
+        options.networkRequestHeaders = .headers(["Authorization"])
+        options.networkResponseHeaders = .headers([])
+
+        // -- Assert --
+        XCTAssertEqual(options.networkRequestHeaders, .headers(["Authorization"]))
+        XCTAssertEqual(options.networkResponseHeaders, .headers([]))
+#endif
     }
 
     func testShouldCaptureNetworkBody_whenReplayOptionInherits_shouldUseDataCollection() throws {
@@ -151,11 +183,13 @@ class SentryReplayOptionsTests: XCTestCase {
         options.networkDetailDenyUrls = ["https://sensitive.example.com", "https://private.example.org"]
 #if SDK_V10
         options.networkCaptureBodies = .disabled
+        options.networkRequestHeaders = .headers(["Authorization", "User-Agent", "X-Custom-Header"])
+        options.networkResponseHeaders = .headers(["Cache-Control", "Set-Cookie", "X-Rate-Limit"])
 #else
         options.networkCaptureBodies = false
-#endif
         options.networkRequestHeaders = ["Authorization", "User-Agent", "X-Custom-Header"]
         options.networkResponseHeaders = ["Cache-Control", "Set-Cookie", "X-Rate-Limit"]
+#endif
 
         // -- Assert --
         XCTAssertEqual(options.sessionSampleRate, 0.5)
@@ -179,11 +213,13 @@ class SentryReplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.networkDetailDenyUrls as? [String], ["https://sensitive.example.com", "https://private.example.org"])
 #if SDK_V10
         XCTAssertEqual(options.networkCaptureBodies, .disabled)
+        XCTAssertEqual(options.networkRequestHeaders, .headers(["Authorization", "User-Agent", "X-Custom-Header"]))
+        XCTAssertEqual(options.networkResponseHeaders, .headers(["Cache-Control", "Set-Cookie", "X-Rate-Limit"]))
 #else
         XCTAssertFalse(options.networkCaptureBodies)
-#endif
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept", "Authorization", "User-Agent", "X-Custom-Header"])
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept", "Cache-Control", "Set-Cookie", "X-Rate-Limit"])
+#endif
     }
 
     func testInit_sessionSampleRateOmitted_shouldUseDefaultValues() {
@@ -351,11 +387,13 @@ class SentryReplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.networkDetailDenyUrls.count, 0)
 #if SDK_V10
         XCTAssertEqual(options.networkCaptureBodies, .inherit)
+        XCTAssertEqual(options.networkRequestHeaders, .inherit)
+        XCTAssertEqual(options.networkResponseHeaders, .inherit)
 #else
         XCTAssertTrue(options.networkCaptureBodies)
-#endif
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept"])
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept"])
+#endif
     }
 
     func testInitFromDict_allValues_shouldSetValues() throws {
@@ -417,11 +455,13 @@ class SentryReplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.networkDetailDenyUrls as? [String], ["https://sensitive.com", "https://auth.com"])
 #if SDK_V10
         XCTAssertEqual(options.networkCaptureBodies, .disabled)
+        XCTAssertEqual(options.networkRequestHeaders, .headers(["Authorization", "User-Agent"]))
+        XCTAssertEqual(options.networkResponseHeaders, .headers(["Cache-Control", "Set-Cookie"]))
 #else
         XCTAssertFalse(options.networkCaptureBodies)
-#endif
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept", "Authorization", "User-Agent"])
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept", "Cache-Control", "Set-Cookie"])
+#endif
     }
 
     // MARK: onErrorSampleRate
@@ -976,8 +1016,13 @@ class SentryReplayOptionsTests: XCTestCase {
         ])
         
         // -- Assert --
+#if SDK_V10
+        XCTAssertEqual(options.networkRequestHeaders, .headers(["Authorization", "User-Agent"]))
+        XCTAssertEqual(options.networkResponseHeaders, .inherit)
+#else
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept", "Authorization", "User-Agent"])
-        XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept"]) // Should remain default
+        XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept"])
+#endif
     }
     
     func testInitFromDict_networkRequestHeaders_whenInvalidValue_shouldUseDefaultValue() {
@@ -987,7 +1032,11 @@ class SentryReplayOptionsTests: XCTestCase {
         ])
         
         // -- Assert --
+#if SDK_V10
+        XCTAssertEqual(options.networkRequestHeaders, .inherit)
+#else
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept"])
+#endif
     }
     
     func testInitFromDict_networkRequestHeaders_whenInvalidArrayValue_shouldFilterInvalidValues() {
@@ -1005,7 +1054,11 @@ class SentryReplayOptionsTests: XCTestCase {
         ])
         
         // -- Assert --
+#if SDK_V10
+        XCTAssertEqual(options.networkRequestHeaders, .headers(["Authorization", "User-Agent", ""]))
+#else
         XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept", "Authorization", "User-Agent", ""])
+#endif
     }
     
     func testInitFromDict_networkResponseHeaders_whenValidValue_shouldSetValue() {
@@ -1015,8 +1068,13 @@ class SentryReplayOptionsTests: XCTestCase {
         ])
         
         // -- Assert --
+#if SDK_V10
+        XCTAssertEqual(options.networkResponseHeaders, .headers(["Cache-Control", "Set-Cookie"]))
+        XCTAssertEqual(options.networkRequestHeaders, .inherit)
+#else
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept", "Cache-Control", "Set-Cookie"])
-        XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept"]) // Should remain default
+        XCTAssertEqual(options.networkRequestHeaders, ["Content-Type", "Content-Length", "Accept"])
+#endif
     }
     
     func testInitFromDict_networkResponseHeaders_whenInvalidValue_shouldUseDefaultValue() {
@@ -1026,7 +1084,11 @@ class SentryReplayOptionsTests: XCTestCase {
         ])
         
         // -- Assert --
+#if SDK_V10
+        XCTAssertEqual(options.networkResponseHeaders, .inherit)
+#else
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept"])
+#endif
     }
     
     func testInitFromDict_networkResponseHeaders_whenInvalidArrayValue_shouldFilterInvalidValues() {
@@ -1044,7 +1106,11 @@ class SentryReplayOptionsTests: XCTestCase {
         ])
         
         // -- Assert --
+#if SDK_V10
+        XCTAssertEqual(options.networkResponseHeaders, .headers(["Cache-Control", "Set-Cookie", ""]))
+#else
         XCTAssertEqual(options.networkResponseHeaders, ["Content-Type", "Content-Length", "Accept", "Cache-Control", "Set-Cookie", ""])
+#endif
     }
     
     // MARK: sdkInfo

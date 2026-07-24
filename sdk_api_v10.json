@@ -55068,18 +55068,10 @@
                     "accessorKind": "get",
                     "children": [
                       {
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "String",
-                            "printedName": "Swift.String",
-                            "usr": "s:SS"
-                          }
-                        ],
                         "kind": "TypeNominal",
-                        "name": "Array",
-                        "printedName": "[Swift.String]",
-                        "usr": "s:Sa"
+                        "name": "NetworkHeaderCapture",
+                        "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                        "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                       }
                     ],
                     "declAttributes": [
@@ -55088,28 +55080,20 @@
                     "declKind": "Accessor",
                     "implicit": true,
                     "kind": "Accessor",
-                    "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersSaySSGvgZ",
+                    "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersAC20NetworkHeaderCaptureOvgZ",
                     "moduleName": "Sentry",
                     "name": "Get",
                     "printedName": "Get()",
                     "static": true,
-                    "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersSaySSGvgZ"
+                    "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersAC20NetworkHeaderCaptureOvgZ"
                   }
                 ],
                 "children": [
                   {
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "String",
-                        "printedName": "Swift.String",
-                        "usr": "s:SS"
-                      }
-                    ],
                     "kind": "TypeNominal",
-                    "name": "Array",
-                    "printedName": "[Swift.String]",
-                    "usr": "s:Sa"
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                   }
                 ],
                 "declAttributes": [
@@ -55120,12 +55104,12 @@
                 "hasStorage": true,
                 "isLet": true,
                 "kind": "Var",
-                "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersSaySSGvpZ",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersAC20NetworkHeaderCaptureOvpZ",
                 "moduleName": "Sentry",
                 "name": "networkRequestHeaders",
                 "printedName": "networkRequestHeaders",
                 "static": true,
-                "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersSaySSGvpZ"
+                "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC21networkRequestHeadersAC20NetworkHeaderCaptureOvpZ"
               },
               {
                 "accessors": [
@@ -55133,18 +55117,10 @@
                     "accessorKind": "get",
                     "children": [
                       {
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "String",
-                            "printedName": "Swift.String",
-                            "usr": "s:SS"
-                          }
-                        ],
                         "kind": "TypeNominal",
-                        "name": "Array",
-                        "printedName": "[Swift.String]",
-                        "usr": "s:Sa"
+                        "name": "NetworkHeaderCapture",
+                        "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                        "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                       }
                     ],
                     "declAttributes": [
@@ -55153,28 +55129,20 @@
                     "declKind": "Accessor",
                     "implicit": true,
                     "kind": "Accessor",
-                    "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersSaySSGvgZ",
+                    "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersAC20NetworkHeaderCaptureOvgZ",
                     "moduleName": "Sentry",
                     "name": "Get",
                     "printedName": "Get()",
                     "static": true,
-                    "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersSaySSGvgZ"
+                    "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersAC20NetworkHeaderCaptureOvgZ"
                   }
                 ],
                 "children": [
                   {
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "String",
-                        "printedName": "Swift.String",
-                        "usr": "s:SS"
-                      }
-                    ],
                     "kind": "TypeNominal",
-                    "name": "Array",
-                    "printedName": "[Swift.String]",
-                    "usr": "s:Sa"
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                   }
                 ],
                 "declAttributes": [
@@ -55185,12 +55153,12 @@
                 "hasStorage": true,
                 "isLet": true,
                 "kind": "Var",
-                "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersSaySSGvpZ",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersAC20NetworkHeaderCaptureOvpZ",
                 "moduleName": "Sentry",
                 "name": "networkResponseHeaders",
                 "printedName": "networkResponseHeaders",
                 "static": true,
-                "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersSaySSGvpZ"
+                "usr": "s:6Sentry0A13ReplayOptionsC13DefaultValuesC22networkResponseHeadersAC20NetworkHeaderCaptureOvpZ"
               },
               {
                 "accessors": [
@@ -55727,6 +55695,166 @@
             "name": "NetworkBodyCapture",
             "printedName": "NetworkBodyCapture",
             "usr": "s:6Sentry0A13ReplayOptionsC18NetworkBodyCaptureO"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
+                  }
+                ],
+                "declKind": "Func",
+                "funcSelfKind": "NonMutating",
+                "kind": "Function",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO2eeoiySbAE_AEtFZ",
+                "moduleName": "Sentry",
+                "name": "==",
+                "printedName": "==(_:_:)",
+                "static": true,
+                "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO2eeoiySbAE_AEtFZ"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "String",
+                                "printedName": "Swift.String",
+                                "usr": "s:SS"
+                              }
+                            ],
+                            "kind": "TypeNominal",
+                            "name": "Array",
+                            "printedName": "[Swift.String]",
+                            "usr": "s:Sa"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "NetworkHeaderCapture",
+                            "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                            "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
+                          }
+                        ],
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "([Swift.String]) -> Sentry.SentryReplayOptions.NetworkHeaderCapture"
+                      },
+                      {
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "NetworkHeaderCapture",
+                            "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                            "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
+                          }
+                        ],
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture.Type"
+                      }
+                    ],
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Sentry.SentryReplayOptions.NetworkHeaderCapture.Type) -> ([Swift.String]) -> Sentry.SentryReplayOptions.NetworkHeaderCapture"
+                  }
+                ],
+                "declKind": "EnumElement",
+                "kind": "Var",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO7headersyAESaySSGcAEmF",
+                "moduleName": "Sentry",
+                "name": "headers",
+                "printedName": "headers",
+                "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO7headersyAESaySSGcAEmF"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "NetworkHeaderCapture",
+                            "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                            "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
+                          }
+                        ],
+                        "kind": "TypeNominal",
+                        "name": "Metatype",
+                        "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture.Type"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "NetworkHeaderCapture",
+                        "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                        "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
+                      }
+                    ],
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Sentry.SentryReplayOptions.NetworkHeaderCapture.Type) -> Sentry.SentryReplayOptions.NetworkHeaderCapture"
+                  }
+                ],
+                "declKind": "EnumElement",
+                "kind": "Var",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO7inherityA2EmF",
+                "moduleName": "Sentry",
+                "name": "inherit",
+                "printedName": "inherit",
+                "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO7inherityA2EmF"
+              }
+            ],
+            "conformances": [
+              {
+                "kind": "Conformance",
+                "mangledName": "$ss8CopyableP",
+                "name": "Copyable",
+                "printedName": "Copyable",
+                "usr": "s:s8CopyableP"
+              },
+              {
+                "kind": "Conformance",
+                "mangledName": "$sSQ",
+                "name": "Equatable",
+                "printedName": "Equatable",
+                "usr": "s:SQ"
+              },
+              {
+                "kind": "Conformance",
+                "mangledName": "$ss9EscapableP",
+                "name": "Escapable",
+                "printedName": "Escapable",
+                "usr": "s:s9EscapableP"
+              }
+            ],
+            "declKind": "Enum",
+            "kind": "TypeDecl",
+            "mangledName": "$s6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO",
+            "moduleName": "Sentry",
+            "name": "NetworkHeaderCapture",
+            "printedName": "NetworkHeaderCapture",
+            "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
           },
           {
             "children": [
@@ -56979,47 +57107,29 @@
                 "accessorKind": "get",
                 "children": [
                   {
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "String",
-                        "printedName": "Swift.String",
-                        "usr": "s:SS"
-                      }
-                    ],
                     "kind": "TypeNominal",
-                    "name": "Array",
-                    "printedName": "[Swift.String]",
-                    "usr": "s:Sa"
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                   }
                 ],
-                "declAttributes": [
-                  "ObjC"
-                ],
                 "declKind": "Accessor",
+                "implicit": true,
                 "kind": "Accessor",
-                "mangledName": "$s6Sentry0A13ReplayOptionsC21networkRequestHeadersSaySSGvg",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC21networkRequestHeadersAC20NetworkHeaderCaptureOvg",
                 "moduleName": "Sentry",
                 "name": "Get",
                 "printedName": "Get()",
-                "usr": "c:@M@Sentry@objc(cs)SentryReplayOptions(im)networkRequestHeaders"
+                "usr": "s:6Sentry0A13ReplayOptionsC21networkRequestHeadersAC20NetworkHeaderCaptureOvg"
               },
               {
                 "accessorKind": "set",
                 "children": [
                   {
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "String",
-                        "printedName": "Swift.String",
-                        "usr": "s:SS"
-                      }
-                    ],
                     "kind": "TypeNominal",
-                    "name": "Array",
-                    "printedName": "[Swift.String]",
-                    "usr": "s:Sa"
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                   },
                   {
                     "kind": "TypeNominal",
@@ -57027,45 +57137,36 @@
                     "printedName": "()"
                   }
                 ],
-                "declAttributes": [
-                  "ObjC"
-                ],
                 "declKind": "Accessor",
+                "implicit": true,
                 "kind": "Accessor",
-                "mangledName": "$s6Sentry0A13ReplayOptionsC21networkRequestHeadersSaySSGvs",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC21networkRequestHeadersAC20NetworkHeaderCaptureOvs",
                 "moduleName": "Sentry",
                 "name": "Set",
-                "objc_name": "setNetworkRequestHeaders:",
                 "printedName": "Set()",
-                "usr": "c:@M@Sentry@objc(cs)SentryReplayOptions(im)setNetworkRequestHeaders:"
+                "usr": "s:6Sentry0A13ReplayOptionsC21networkRequestHeadersAC20NetworkHeaderCaptureOvs"
               }
             ],
             "children": [
               {
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "String",
-                    "printedName": "Swift.String",
-                    "usr": "s:SS"
-                  }
-                ],
                 "kind": "TypeNominal",
-                "name": "Array",
-                "printedName": "[Swift.String]",
-                "usr": "s:Sa"
+                "name": "NetworkHeaderCapture",
+                "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
               }
             ],
             "declAttributes": [
-              "ObjC"
+              "HasStorage",
+              "NonObjC"
             ],
             "declKind": "Var",
+            "hasStorage": true,
             "kind": "Var",
-            "mangledName": "$s6Sentry0A13ReplayOptionsC21networkRequestHeadersSaySSGvp",
+            "mangledName": "$s6Sentry0A13ReplayOptionsC21networkRequestHeadersAC20NetworkHeaderCaptureOvp",
             "moduleName": "Sentry",
             "name": "networkRequestHeaders",
             "printedName": "networkRequestHeaders",
-            "usr": "c:@M@Sentry@objc(cs)SentryReplayOptions(py)networkRequestHeaders"
+            "usr": "s:6Sentry0A13ReplayOptionsC21networkRequestHeadersAC20NetworkHeaderCaptureOvp"
           },
           {
             "accessors": [
@@ -57073,47 +57174,29 @@
                 "accessorKind": "get",
                 "children": [
                   {
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "String",
-                        "printedName": "Swift.String",
-                        "usr": "s:SS"
-                      }
-                    ],
                     "kind": "TypeNominal",
-                    "name": "Array",
-                    "printedName": "[Swift.String]",
-                    "usr": "s:Sa"
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                   }
                 ],
-                "declAttributes": [
-                  "ObjC"
-                ],
                 "declKind": "Accessor",
+                "implicit": true,
                 "kind": "Accessor",
-                "mangledName": "$s6Sentry0A13ReplayOptionsC22networkResponseHeadersSaySSGvg",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC22networkResponseHeadersAC20NetworkHeaderCaptureOvg",
                 "moduleName": "Sentry",
                 "name": "Get",
                 "printedName": "Get()",
-                "usr": "c:@M@Sentry@objc(cs)SentryReplayOptions(im)networkResponseHeaders"
+                "usr": "s:6Sentry0A13ReplayOptionsC22networkResponseHeadersAC20NetworkHeaderCaptureOvg"
               },
               {
                 "accessorKind": "set",
                 "children": [
                   {
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "String",
-                        "printedName": "Swift.String",
-                        "usr": "s:SS"
-                      }
-                    ],
                     "kind": "TypeNominal",
-                    "name": "Array",
-                    "printedName": "[Swift.String]",
-                    "usr": "s:Sa"
+                    "name": "NetworkHeaderCapture",
+                    "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                    "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
                   },
                   {
                     "kind": "TypeNominal",
@@ -57121,45 +57204,36 @@
                     "printedName": "()"
                   }
                 ],
-                "declAttributes": [
-                  "ObjC"
-                ],
                 "declKind": "Accessor",
+                "implicit": true,
                 "kind": "Accessor",
-                "mangledName": "$s6Sentry0A13ReplayOptionsC22networkResponseHeadersSaySSGvs",
+                "mangledName": "$s6Sentry0A13ReplayOptionsC22networkResponseHeadersAC20NetworkHeaderCaptureOvs",
                 "moduleName": "Sentry",
                 "name": "Set",
-                "objc_name": "setNetworkResponseHeaders:",
                 "printedName": "Set()",
-                "usr": "c:@M@Sentry@objc(cs)SentryReplayOptions(im)setNetworkResponseHeaders:"
+                "usr": "s:6Sentry0A13ReplayOptionsC22networkResponseHeadersAC20NetworkHeaderCaptureOvs"
               }
             ],
             "children": [
               {
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "String",
-                    "printedName": "Swift.String",
-                    "usr": "s:SS"
-                  }
-                ],
                 "kind": "TypeNominal",
-                "name": "Array",
-                "printedName": "[Swift.String]",
-                "usr": "s:Sa"
+                "name": "NetworkHeaderCapture",
+                "printedName": "Sentry.SentryReplayOptions.NetworkHeaderCapture",
+                "usr": "s:6Sentry0A13ReplayOptionsC20NetworkHeaderCaptureO"
               }
             ],
             "declAttributes": [
-              "ObjC"
+              "HasStorage",
+              "NonObjC"
             ],
             "declKind": "Var",
+            "hasStorage": true,
             "kind": "Var",
-            "mangledName": "$s6Sentry0A13ReplayOptionsC22networkResponseHeadersSaySSGvp",
+            "mangledName": "$s6Sentry0A13ReplayOptionsC22networkResponseHeadersAC20NetworkHeaderCaptureOvp",
             "moduleName": "Sentry",
             "name": "networkResponseHeaders",
             "printedName": "networkResponseHeaders",
-            "usr": "c:@M@Sentry@objc(cs)SentryReplayOptions(py)networkResponseHeaders"
+            "usr": "s:6Sentry0A13ReplayOptionsC22networkResponseHeadersAC20NetworkHeaderCaptureOvp"
           },
           {
             "accessors": [

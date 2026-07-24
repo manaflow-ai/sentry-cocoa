@@ -83,6 +83,18 @@
 }
 
 #if SDK_V10
+- (void)testNetworkHeaders_whenDefault_shouldInherit
+{
+    // -- Act --
+    SentryObjCReplayOptions *options = [[SentryObjCReplayOptions alloc] init];
+
+    // -- Assert --
+    XCTAssertEqual(
+        options.networkRequestHeaders.mode, SentryObjCReplayNetworkHeaderCaptureModeInherit);
+    XCTAssertEqual(
+        options.networkResponseHeaders.mode, SentryObjCReplayNetworkHeaderCaptureModeInherit);
+}
+
 - (void)testNetworkCaptureBodies_whenSet_shouldReturnValue
 {
     // -- Arrange --
@@ -154,10 +166,19 @@
     SentryObjCReplayOptions *options = [[SentryObjCReplayOptions alloc] init];
 
     // -- Act --
+#if SDK_V10
+    options.networkRequestHeaders = [SentryObjCReplayNetworkHeaderCapture headers:@[ @"X-Custom" ]];
+
+    // -- Assert --
+    XCTAssertEqual(
+        options.networkRequestHeaders.mode, SentryObjCReplayNetworkHeaderCaptureModeHeaders);
+    XCTAssertEqualObjects(options.networkRequestHeaders.headers, @[ @"X-Custom" ]);
+#else
     options.networkRequestHeaders = @[ @"X-Custom" ];
 
     // -- Assert (merges with defaults) --
     XCTAssertTrue([options.networkRequestHeaders containsObject:@"X-Custom"]);
+#endif
 }
 
 - (void)testNetworkResponseHeaders_whenSet_shouldContainCustomValue
@@ -166,10 +187,20 @@
     SentryObjCReplayOptions *options = [[SentryObjCReplayOptions alloc] init];
 
     // -- Act --
+#if SDK_V10
+    options.networkResponseHeaders =
+        [SentryObjCReplayNetworkHeaderCapture headers:@[ @"X-Response" ]];
+
+    // -- Assert --
+    XCTAssertEqual(
+        options.networkResponseHeaders.mode, SentryObjCReplayNetworkHeaderCaptureModeHeaders);
+    XCTAssertEqualObjects(options.networkResponseHeaders.headers, @[ @"X-Response" ]);
+#else
     options.networkResponseHeaders = @[ @"X-Response" ];
 
     // -- Assert (merges with defaults) --
     XCTAssertTrue([options.networkResponseHeaders containsObject:@"X-Response"]);
+#endif
 }
 
 #pragma mark - Methods (no-crash tests)

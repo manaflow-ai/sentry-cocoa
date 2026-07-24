@@ -1,9 +1,11 @@
 #import <Foundation/Foundation.h>
 #if !__has_include(<SentryObjC/SentryObjCDefines.h>)
 #    import "SentryObjCReplayNetworkBodyCapture.h"
+#    import "SentryObjCReplayNetworkHeaderCapture.h"
 #    import "SentryObjCReplayQuality.h"
 #else
 #    import <SentryObjC/SentryObjCReplayNetworkBodyCapture.h>
+#    import <SentryObjC/SentryObjCReplayNetworkHeaderCapture.h>
 #    import <SentryObjC/SentryObjCReplayQuality.h>
 #endif
 
@@ -99,6 +101,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) BOOL networkCaptureBodies;
 #endif
 
+#if SDK_V10
+/// Controls request header capture. Defaults to inheriting global data collection options.
+@property (nonatomic, strong) SentryObjCReplayNetworkHeaderCapture *networkRequestHeaders;
+
+/// Controls response header capture. Defaults to inheriting global data collection options.
+@property (nonatomic, strong) SentryObjCReplayNetworkHeaderCapture *networkResponseHeaders;
+#else
 /**
  * Request headers to capture for allowed URLs during session replay.
  * Specifies which HTTP request headers should be captured and included in session replay
@@ -112,6 +121,7 @@ NS_ASSUME_NONNULL_BEGIN
  * network details. Header matching is case-insensitive.
  */
 @property (nonatomic, copy) NSArray<NSString *> *networkResponseHeaders;
+#endif // SDK_V10
 
 /// Initializes session replay options with default values.
 - (instancetype)init;
