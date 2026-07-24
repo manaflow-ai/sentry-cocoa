@@ -21,6 +21,7 @@
 - Change `SentryRequest.cookies` from a string to a dictionary of cookie names and values (#8460)
 - Change `SentryReplayOptions.networkCaptureBodies` from `Bool` to `SentryReplayOptions.NetworkBodyCapture`. (#8547)
   Use `.inherit` to follow `dataCollection.httpBodies`, `.enabled` to capture all Replay network bodies, or `.disabled` to capture none
+- Change Replay network header options to `NetworkHeaderCapture` and filter sensitive values (#8566)
 
 ### Fixes
 
