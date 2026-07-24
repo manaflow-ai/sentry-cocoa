@@ -13,6 +13,7 @@
 
 ### Breaking Changes
 
+- Remove `sendDefaultPii`; use `dataCollection` to configure automatic data collection (#8253)
 - Remove Objective-C `@objc` attributes from SentrySDK (#8308)
 - Remove deprecated `locale` from device context; use `locale` in culture context instead (#8325)
 - Change `SentryReplayOptions.networkCaptureBodies` from `Bool` to `SentryReplayOptions.NetworkBodyCapture`.
