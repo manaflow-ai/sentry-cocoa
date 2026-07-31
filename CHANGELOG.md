@@ -9,6 +9,10 @@
 
 - Bump the minimum deployment targets to macOS 12 and watchOS 9 because Xcode 27 no longer supports earlier versions. This lets the SDK adopt Xcode 27 without blocking users from building and submitting their apps with the latest Xcode. (#8595, #8113, #8189)
 
+### Improvements
+
+- Session Replay keeps captured frames in memory for live video encode while still writing PNGs to disk for crash durability. Encode prefers the in-memory image and only falls back to disk for frames recovered after a crash, avoiding a PNG readback on the streaming hot path. (#TBD)
+
 ### Fixes
 
 - Fix incorrect `duration` sent for active sessions (#8612)
