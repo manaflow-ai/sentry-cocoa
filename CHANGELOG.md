@@ -55,9 +55,6 @@
 - Add a depth limit to view hierarchy serialization to prevent a stack overflow crash on deeply nested view hierarchies (#8292)
 - Persist the configured environment in crash reports so later app launches don't overwrite it (#8511)
 - Only expose `experimental.dataCollection` APIs in SDK V10 (#8435)
-
-### Fixes
-
 - Prevent Session Replay network-detail breadcrumbs from blocking URLSession cancellation on the task monitor (#8497)
 
 ### Improvements
