@@ -70,7 +70,10 @@ class SentrySDKInternalTests: XCTestCase {
                 dateProvider: currentDate,
                 dispatchQueueWrapper: dispatchQueueWrapper
             ))
-            let breadcrumbProcessor = SentryWatchdogTerminationBreadcrumbProcessor(maxBreadcrumbs: 10, fileManager: fileManager)
+            let breadcrumbProcessor = SentryWatchdogTerminationBreadcrumbProcessor(
+                maxBreadcrumbs: 10,
+                fileManager: fileManager,
+                dispatchQueueWrapper: dispatchQueueWrapper)
             scopePersistentStore = try XCTUnwrap(TestSentryScopePersistentStore(fileManager: fileManager))
             let attributesProcessor = SentryWatchdogTerminationAttributesProcessor(
                 withDispatchQueueWrapper: dispatchQueueWrapper,
@@ -735,8 +738,11 @@ class SentrySDKInternalTests: XCTestCase {
         options.dsn = SentrySDKInternalTests.dsnAsString
 
         let fileManager = try TestFileManager(options: options, dateProvider: fixture.currentDate, dispatchQueueWrapper: fixture.dispatchQueueWrapper)
-        let breadcrumbProcessor = SentryWatchdogTerminationBreadcrumbProcessor(maxBreadcrumbs: 10, fileManager: fileManager)
         let dispatchQueueWrapper = TestSentryDispatchQueueWrapper()
+        let breadcrumbProcessor = SentryWatchdogTerminationBreadcrumbProcessor(
+            maxBreadcrumbs: 10,
+            fileManager: fileManager,
+            dispatchQueueWrapper: dispatchQueueWrapper)
         let scopePersistentStore = try XCTUnwrap(TestSentryScopePersistentStore(fileManager: fileManager))
         let attributesProcessor = SentryWatchdogTerminationAttributesProcessor(
             withDispatchQueueWrapper: dispatchQueueWrapper,

@@ -15,6 +15,7 @@
 
 ### Fixes
 
+- Prevent breadcrumb persistence for watchdog termination events from blocking the calling thread (#8653)
 - Fix incorrect `duration` sent for active sessions (#8612)
   - Session `duration` is now set only when the session ends. Active sessions (including on error increments) no longer emit a bogus `duration`.
 - Fix a race that could prevent consecutive app hangs from being reported (#8627)

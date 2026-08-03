@@ -6,7 +6,7 @@
 - [2. Adding Swift code in the project](#2-adding-swift-code-in-the-project)
 - [3. Manually installing iOS 12 simulators](#3-manually-installing-ios-12-simulators)
 - [4. Custom SentryHttpStatusCodeRange type instead of NSRange](#4-custom-sentryhttpstatuscoderange-type-instead-of-nsrange)
-- [5. Writing breadcrumbs to disk in the main thread](#5-writing-breadcrumbs-to-disk-in-the-main-thread)
+- [5. Writing breadcrumbs to disk](#5-writing-breadcrumbs-to-disk)
 - [6. Bump min Xcode version to 13](#6-bump-min-xcode-version-to-13)
 - [7. Remove the permissions feature](#7-remove-the-permissions-feature)
 - [8. Rename master to main](#8-rename-master-to-main)
@@ -88,12 +88,14 @@ Contributors: @marandaneto, @brustolin and @philipphofmann
 
 We decided not to use the `NSRange` type for the `failedRequestStatusCodes` property of the `SentryNetworkTracker` class because it's not compatible with the specification, which requires the type to be a range of `from` -> `to` integers. The `NSRange` type is a range of `location` -> `length` integers. We decided to use a custom type instead of `NSRange` to avoid confusion. The custom type is called `SentryHttpStatusCodeRange`.
 
-## 5. Writing breadcrumbs to disk in the main thread
+## 5. Writing breadcrumbs to disk
 
 Date: November 15, 2022
 Contributors: @kevinrenskers, @brustolin and @philipphofmann
 
-For the benefit of OOM crashes, we write breadcrumbs to disk; see https://github.com/getsentry/sentry-cocoa/pull/2347. We have decided to do this in the main thread to ensure we're not missing out on any breadcrumbs. It's mainly the last breadcrumb(s) that are important to figure out what is causing an OOM. And since we're only appending to an open file stream, the overhead is acceptable compared to the benefit of having accurate breadcrumbs.
+For the benefit of OOM crashes, we write breadcrumbs to disk; see https://github.com/getsentry/sentry-cocoa/pull/2347. We initially decided to do this on the calling thread to ensure we didn't miss the latest breadcrumbs.
+
+Update August 3, 2026: Reports of file writes causing app hangs demonstrated that average write performance did not account for filesystem tail latency; see https://github.com/getsentry/sentry-cocoa/issues/7794. Breadcrumb serialization and persistence now run on a serial background queue. This preserves breadcrumb order while accepting that the most recent queued breadcrumbs can be lost if the OS terminates the app before they are written.
 
 ## 6. Bump min Xcode version to 13
 

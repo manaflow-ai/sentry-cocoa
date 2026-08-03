@@ -29,7 +29,8 @@ class TestSentryWatchdogTerminationBreadcrumbProcessorTests: XCTestCase {
         func getSut() -> TestSentryWatchdogTerminationBreadcrumbProcessor {
             return TestSentryWatchdogTerminationBreadcrumbProcessor(
                 maxBreadcrumbs: 10,
-                fileManager: fileManager
+                fileManager: fileManager,
+                dispatchQueueWrapper: TestSentryDispatchQueueWrapper()
             )
         }
     }

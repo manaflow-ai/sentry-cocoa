@@ -38,6 +38,7 @@ class SentryWatchdogTerminationBreadcrumbProcessorTests: XCTestCase {
         let invalidJSONbreadcrumb: [String: Double]
         let options: Options
         let fileManager: SentryFileManager
+        let dispatchQueueWrapper = TestSentryDispatchQueueWrapper()
         let currentDate = TestCurrentDateProvider()
         let maxBreadcrumbs = 10
 
@@ -66,7 +67,8 @@ class SentryWatchdogTerminationBreadcrumbProcessorTests: XCTestCase {
         func getSut(fileManager: SentryFileManager) -> SentryWatchdogTerminationBreadcrumbProcessor {
             return SentryWatchdogTerminationBreadcrumbProcessor(
                 maxBreadcrumbs: maxBreadcrumbs,
-                fileManager: fileManager)
+                fileManager: fileManager,
+                dispatchQueueWrapper: dispatchQueueWrapper)
         }
     }
 
@@ -120,6 +122,11 @@ class SentryWatchdogTerminationBreadcrumbProcessorTests: XCTestCase {
     func testAddSerializedBreadcrumb_whenFileWriteBlocks_shouldNotBlockCaller() {
         // -- Arrange --
         let blockingFileHandle = BlockingFileHandle()
+        let dispatchQueue = SentryDispatchQueueWrapper(name: "io.sentry.test-watchdog-breadcrumb-processor")
+        sut = SentryWatchdogTerminationBreadcrumbProcessor(
+            maxBreadcrumbs: fixture.maxBreadcrumbs,
+            fileManager: fixture.fileManager,
+            dispatchQueueWrapper: dispatchQueue)
         Dynamic(sut).fileHandle = blockingFileHandle
         let callReturned = DispatchSemaphore(value: 0)
         let breadcrumb = fixture.breadcrumb.serialize()

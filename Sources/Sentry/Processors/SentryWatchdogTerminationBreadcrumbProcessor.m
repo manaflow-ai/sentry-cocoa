@@ -7,6 +7,7 @@
 @interface SentryWatchdogTerminationBreadcrumbProcessor ()
 
 @property (strong, nonatomic) SentryFileManager *fileManager;
+@property (strong, nonatomic) SentryDispatchQueueWrapper *dispatchQueueWrapper;
 
 @property (strong, nonatomic) NSFileHandle *fileHandle;
 @property (strong, nonatomic) NSString *activeFilePath;
@@ -19,15 +20,34 @@
 
 - (instancetype)initWithMaxBreadcrumbs:(NSInteger)maxBreadcrumbs
 {
-    return [self initWithMaxBreadcrumbs:maxBreadcrumbs
-                            fileManager:SentryDependencyContainer.sharedInstance.fileManager];
+    return [self
+        initWithMaxBreadcrumbs:maxBreadcrumbs
+                   fileManager:SentryDependencyContainer.sharedInstance.fileManager
+          dispatchQueueWrapper:
+              [SentryDependencyContainer.sharedInstance.dispatchFactory
+                  createUtilityQueue:"io.sentry.watchdog-termination-tracking.breadcrumbs-processor"
+                    relativePriority:0]];
 }
 
 - (instancetype)initWithMaxBreadcrumbs:(NSInteger)maxBreadcrumbs
                            fileManager:(SentryFileManager *_Nullable)fileManager
 {
+    return [self
+        initWithMaxBreadcrumbs:maxBreadcrumbs
+                   fileManager:fileManager
+          dispatchQueueWrapper:
+              [SentryDependencyContainer.sharedInstance.dispatchFactory
+                  createUtilityQueue:"io.sentry.watchdog-termination-tracking.breadcrumbs-processor"
+                    relativePriority:0]];
+}
+
+- (instancetype)initWithMaxBreadcrumbs:(NSInteger)maxBreadcrumbs
+                           fileManager:(SentryFileManager *_Nullable)fileManager
+                  dispatchQueueWrapper:(SentryDispatchQueueWrapper *)dispatchQueueWrapper
+{
     if (self = [super init]) {
         self.fileManager = fileManager;
+        self.dispatchQueueWrapper = dispatchQueueWrapper;
 
         self.breadcrumbCounter = 0;
         self.maxBreadcrumbs = maxBreadcrumbs;
@@ -46,12 +66,14 @@
 - (void)addSerializedBreadcrumb:(NSDictionary *)crumb
 {
     SENTRY_LOG_DEBUG(@"Adding breadcrumb: %@", crumb);
-    NSData *_Nullable jsonData = [SentrySerializationSwift dataWithJSONObject:crumb];
-    if (jsonData == nil) {
-        SENTRY_LOG_ERROR(@"Error serializing breadcrumb to JSON");
-        return;
-    }
-    [self storeBreadcrumb:SENTRY_UNWRAP_NULLABLE(NSData, jsonData)];
+    [self.dispatchQueueWrapper dispatchAsyncWithBlock:^{
+        NSData *_Nullable jsonData = [SentrySerializationSwift dataWithJSONObject:crumb];
+        if (jsonData == nil) {
+            SENTRY_LOG_ERROR(@"Error serializing breadcrumb to JSON");
+            return;
+        }
+        [self storeBreadcrumb:SENTRY_UNWRAP_NULLABLE(NSData, jsonData)];
+    }];
 }
 
 - (void)clear
@@ -61,8 +83,10 @@
 
 - (void)clearBreadcrumbs
 {
-    [self deleteFiles];
-    [self switchFileHandle];
+    [self.dispatchQueueWrapper dispatchAsyncWithBlock:^{
+        [self deleteFiles];
+        [self switchFileHandle];
+    }];
 }
 
 // MARK: - Helpers
