@@ -30,7 +30,6 @@
 #import "SentryHub+Private.h"
 #import "SentryHub+Test.h"
 #import "SentryLogC.h"
-#import "SentryNetworkTracker.h"
 #import "SentryPerformanceTracker+Testing.h"
 #import "SentrySDK+Private.h"
 #import "SentrySDKInternal+Tests.h"
@@ -39,5 +38,4 @@
 #import "SentryTraceContext.h"
 #import "SentryTracer+Test.h"
 #import "SentryTransaction.h"
-#import "SentryTransport.h"
 #import "SentryTransportAdapter.h"

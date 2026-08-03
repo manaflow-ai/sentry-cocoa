@@ -1618,7 +1618,7 @@
     "kind": "ObjCMethodDecl",
     "name": "cookies",
     "parent": "SentryObjCRequest",
-    "returnType": "NSString * _Nullable",
+    "returnType": "NSDictionary<NSString *,NSString *> * _Nullable",
     "instance": true
   },
   {
@@ -2086,6 +2086,13 @@
   {
     "kind": "ObjCMethodDecl",
     "name": "enableLogs",
+    "parent": "SentryObjCOptions",
+    "returnType": "BOOL",
+    "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "enableMemoryIntrospection",
     "parent": "SentryObjCOptions",
     "returnType": "BOOL",
     "instance": true
@@ -5782,6 +5789,13 @@
   {
     "kind": "ObjCMethodDecl",
     "name": "setDataValue:forKey:",
+    "parent": "SentryObjCBreadcrumb",
+    "returnType": "void",
+    "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "setDataValue:forKey:",
     "parent": "SentryObjCSpan",
     "returnType": "void",
     "instance": true
@@ -5985,6 +5999,13 @@
   {
     "kind": "ObjCMethodDecl",
     "name": "setEnableLogs:",
+    "parent": "SentryObjCOptions",
+    "returnType": "void",
+    "instance": true
+  },
+  {
+    "kind": "ObjCMethodDecl",
+    "name": "setEnableMemoryIntrospection:",
     "parent": "SentryObjCOptions",
     "returnType": "void",
     "instance": true
@@ -9053,7 +9074,7 @@
     "kind": "ObjCPropertyDecl",
     "name": "cookies",
     "parent": "SentryObjCRequest",
-    "type": "NSString * _Nullable"
+    "type": "NSDictionary<NSString *,NSString *> * _Nullable"
   },
   {
     "kind": "ObjCPropertyDecl",
@@ -9346,6 +9367,12 @@
   {
     "kind": "ObjCPropertyDecl",
     "name": "enableLogs",
+    "parent": "SentryObjCOptions",
+    "type": "BOOL"
+  },
+  {
+    "kind": "ObjCPropertyDecl",
+    "name": "enableMemoryIntrospection",
     "parent": "SentryObjCOptions",
     "type": "BOOL"
   },
