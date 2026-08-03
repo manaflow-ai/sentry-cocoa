@@ -5,6 +5,34 @@ import XCTest
 class SentryWatchdogTerminationBreadcrumbProcessorTests: XCTestCase {
     private static let dsn = TestConstants.dsnForTestCase(type: SentryWatchdogTerminationBreadcrumbProcessorTests.self)
 
+    private final class BlockingFileHandle: NSObject, @unchecked Sendable {
+        let writeStarted = DispatchSemaphore(value: 0)
+        private let allowWrite = DispatchSemaphore(value: 0)
+        private let lock = NSLock()
+        private var shouldBlock = true
+
+        @objc func seekToEndOfFile() -> UInt64 {
+            return 0
+        }
+
+        @objc func writeData(_ data: Data) {
+            let shouldBlock = lock.synchronized {
+                defer { self.shouldBlock = false }
+                return self.shouldBlock
+            }
+            guard shouldBlock else { return }
+
+            writeStarted.signal()
+            allowWrite.wait()
+        }
+
+        @objc func closeFile() { }
+
+        func unblockWrite() {
+            allowWrite.signal()
+        }
+    }
+
     private class Fixture {
         let breadcrumb: Breadcrumb
         let invalidJSONbreadcrumb: [String: Double]
@@ -87,6 +115,35 @@ class SentryWatchdogTerminationBreadcrumbProcessorTests: XCTestCase {
         let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: firstLine.data(using: .utf8)!) as? [String: String])
 
         XCTAssertEqual(dict, breadcrumb)
+    }
+
+    func testAddSerializedBreadcrumb_whenFileWriteBlocks_shouldNotBlockCaller() {
+        // -- Arrange --
+        let blockingFileHandle = BlockingFileHandle()
+        Dynamic(sut).fileHandle = blockingFileHandle
+        let callReturned = DispatchSemaphore(value: 0)
+        let breadcrumb = fixture.breadcrumb.serialize()
+
+        // -- Act --
+        DispatchQueue.global().async { [sut] in
+            sut?.addSerializedBreadcrumb(breadcrumb)
+            callReturned.signal()
+        }
+
+        guard blockingFileHandle.writeStarted.wait(timeout: .now() + 1) == .success else {
+            blockingFileHandle.unblockWrite()
+            return XCTFail("Expected the breadcrumb processor to start writing")
+        }
+
+        let callReturnedBeforeWriteCompleted = callReturned.wait(timeout: .now() + 0.1) == .success
+        blockingFileHandle.unblockWrite()
+
+        if !callReturnedBeforeWriteCompleted {
+            XCTAssertEqual(callReturned.wait(timeout: .now() + 1), .success)
+        }
+
+        // -- Assert --
+        XCTAssertTrue(callReturnedBeforeWriteCompleted, "Adding a breadcrumb must not block its caller on file I/O")
     }
 
     func testStoreInMultipleFiles() throws {
