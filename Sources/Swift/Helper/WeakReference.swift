@@ -5,7 +5,7 @@ import Foundation
 /// `weak` runtime (`objc_loadWeak`), which is safe against concurrent
 /// deallocation of the referenced object.
 // swiftlint:disable:next missing_docs
-@_spi(Private) public class WeakReference<T: AnyObject> {
+@_spi(Private) public final class WeakReference<T: AnyObject>: @unchecked Sendable {
     // swiftlint:disable:next missing_docs
     public weak var value: T?
 

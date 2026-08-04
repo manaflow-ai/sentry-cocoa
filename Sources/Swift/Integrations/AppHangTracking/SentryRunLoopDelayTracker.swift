@@ -3,8 +3,54 @@ internal import _SentryPrivate
 import UIKit
 #endif
 
-typealias SentryRunLoopDelayTrackerHandler = (_ delay: SentryRunLoopDelay) -> Void
+typealias SentryRunLoopDelayTrackerHandler = @Sendable (_ delay: SentryRunLoopDelay) -> Void
 typealias SentryRunLoopDelayTrackerObserverToken = UUID
+
+/// Owns the state used by the background polling queue. The date provider is immutable after
+/// construction and observer callbacks are protected by the mutex.
+private final class SentryRunLoopDelayWaiter: @unchecked Sendable {
+    private let pollingInterval: TimeInterval
+    private let dateProvider: SentryCurrentDateProvider
+    private let observers = SentryMutex<[SentryRunLoopDelayTrackerObserverToken: SentryRunLoopDelayTrackerHandler]>([:])
+
+    init(pollingInterval: TimeInterval, dateProvider: SentryCurrentDateProvider) {
+        self.pollingInterval = pollingInterval
+        self.dateProvider = dateProvider
+    }
+
+    func addObserver(token: SentryRunLoopDelayTrackerObserverToken, handler: @escaping SentryRunLoopDelayTrackerHandler) {
+        observers.withLock { $0[token] = handler }
+    }
+
+    func removeObserver(token: SentryRunLoopDelayTrackerObserverToken) -> Bool {
+        let (_, isEmpty) = observers.withLock {
+            ($0.removeValue(forKey: token), $0.isEmpty)
+        }
+        return isEmpty
+    }
+
+    func waitForDelay(semaphore: DispatchSemaphore, started: TimeInterval) {
+        var hasTimedOut = false
+        var semaphoreSuccess = false
+        while !semaphoreSuccess {
+            let timeout = DispatchTime.now() + DispatchTimeInterval.milliseconds(Int(pollingInterval * 1_000))
+            let result = semaphore.wait(timeout: timeout)
+            let duration = dateProvider.systemUptime() - started
+            switch result {
+            case .timedOut:
+                let handlers = observers.withLock { Array($0.values) }
+                handlers.forEach { $0(.init(duration: duration, isOngoing: true)) }
+                hasTimedOut = true
+            case .success:
+                semaphoreSuccess = true
+                if hasTimedOut {
+                    let handlers = observers.withLock { Array($0.values) }
+                    handlers.forEach { $0(.init(duration: duration, isOngoing: false)) }
+                }
+            }
+        }
+    }
+}
 
 // In test/debug builds we use a protocol so that the tracker can be replaced with a mock.
 // In release builds the protocol indirection is eliminated via typealiases.
@@ -67,14 +113,11 @@ final class SentryDefaultRunLoopDelayTracker<T: SentryRunLoopObserver, Dependenc
     // MARK: - State
 
     private let queue: DispatchQueue
-    private let pollingInterval: TimeInterval
-
     private let dateProvider: SentryCurrentDateProvider
     private let createObserver: CreateObserverFunc<T>
     private let addObserver: AddObserverFunc<T>
     private let removeObserver: RemoveObserverFunc<T>
-
-    private let observers = SentryMutex<[SentryRunLoopDelayTrackerObserverToken: SentryRunLoopDelayTrackerHandler]>([:])
+    private let waiter: SentryRunLoopDelayWaiter
     private var mainQueueState: MainQueueState
 
     // MARK: - Implementation
@@ -95,13 +138,15 @@ final class SentryDefaultRunLoopDelayTracker<T: SentryRunLoopObserver, Dependenc
         self.removeObserver = removeObserver
         self.queue = queue
 #if canImport(UIKit) && !SENTRY_NO_UI_FRAMEWORK && !os(visionOS) && !os(watchOS)
-        let window = dependencies.application()?.getKeyWindow()
-        let maxFPS = Double(window?.screen.maximumFramesPerSecond ?? 60)
+        let maxFPS = Double(dependencies.application()?.getMaximumFramesPerSecond() ?? 60)
 #else
         let maxFPS: Double = 60.0
 #endif
         let expectedFrameDuration = 1.0 / maxFPS
-        pollingInterval = expectedFrameDuration * 1.5
+        waiter = SentryRunLoopDelayWaiter(
+            pollingInterval: expectedFrameDuration * 1.5,
+            dateProvider: dependencies.dateProvider
+        )
         mainQueueState = .init()
     }
 
@@ -123,9 +168,7 @@ final class SentryDefaultRunLoopDelayTracker<T: SentryRunLoopObserver, Dependenc
     /// - Precondition: Must be called on main queue
     func addObserver(handler: @escaping SentryRunLoopDelayTrackerHandler) -> SentryRunLoopDelayTrackerObserverToken {
         let token = SentryRunLoopDelayTrackerObserverToken()
-        observers.withLock {
-            $0[token] = handler
-        }
+        waiter.addObserver(token: token, handler: handler)
         startIfNecessary()
         return token
     }
@@ -136,11 +179,7 @@ final class SentryDefaultRunLoopDelayTracker<T: SentryRunLoopObserver, Dependenc
     func removeObserver(token: SentryRunLoopDelayTrackerObserverToken) {
         // Prevent the removed handler from being deallocated inside `withLock`. Its deinit chain could re-enter the lock and deadlock.
         // Returning the reference to the removed handler from `withLock` ensures that it is deallocated outside the critical section.
-        let (_, isEmpty) = observers.withLock {
-            ($0.removeValue(forKey: token), $0.isEmpty)
-        }
-
-        if isEmpty {
+        if waiter.removeObserver(token: token) {
             stop()
         }
     }
@@ -165,8 +204,8 @@ final class SentryDefaultRunLoopDelayTracker<T: SentryRunLoopObserver, Dependenc
                 mainQueueState.loopStartTime = currentTime
                 let localSemaphore = DispatchSemaphore(value: 0)
                 mainQueueState.semaphore = localSemaphore
-                queue.async { [weak self] in
-                    self?.waitForDelay(semaphore: localSemaphore, started: started)
+                queue.async { [waiter = self.waiter] in
+                    waiter.waitForDelay(semaphore: localSemaphore, started: started)
                 }
             default:
                 assertionFailure("Unexpected run loop activity \(activity)")
@@ -190,31 +229,6 @@ final class SentryDefaultRunLoopDelayTracker<T: SentryRunLoopObserver, Dependenc
         mainQueueState.semaphore = nil
     }
 
-    // MARK: Background queue
-
-    /// - Precondition: Must be called on background queue
-    private func waitForDelay(semaphore: DispatchSemaphore, started: TimeInterval) {
-        var hasTimedOut = false
-        var semaphoreSuccess = false
-        while !semaphoreSuccess {
-            let timeout = DispatchTime.now() + DispatchTimeInterval.milliseconds(Int(pollingInterval * 1_000))
-            let result = semaphore.wait(timeout: timeout)
-            let duration = dateProvider.systemUptime() - started
-            switch result {
-            case .timedOut:
-                // Snapshot handlers outside the critical section to avoid deadlocks if a handler calls addObserver/removeObserver.
-                let handlers = observers.withLock { Array($0.values) }
-                handlers.forEach { $0(.init(duration: duration, isOngoing: true)) }
-                hasTimedOut = true
-            case .success:
-                semaphoreSuccess = true
-                if hasTimedOut {
-                    let handlers = observers.withLock { Array($0.values) }
-                    handlers.forEach { $0(.init(duration: duration, isOngoing: false)) }
-                }
-            }
-        }
-    }
 }
 
 extension SentryDefaultRunLoopDelayTracker where T == CFRunLoopObserver {

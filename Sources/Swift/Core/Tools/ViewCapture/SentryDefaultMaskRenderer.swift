@@ -3,7 +3,7 @@
 
 import UIKit
 
-class SentryDefaultMaskRenderer: NSObject, SentryMaskRenderer {
+class SentryDefaultMaskRenderer: NSObject, SentryMaskRenderer, @unchecked Sendable {
     func maskScreenshot(screenshot image: UIImage, size: CGSize, masking: [SentryRedactRegion]) -> UIImage {
         let image = UIGraphicsImageRenderer(size: size, format: .init(for: .init(displayScale: 1))).image { context in
             applyMasking(to: context, image: image, size: size, masking: masking)
@@ -36,9 +36,9 @@ class SentryDefaultMaskRenderer: NSObject, SentryMaskRenderer {
             defer { latestRegion = region }
 
             switch region.type {
-            case .redact, .redactSwiftUI:
+            case .redact, .priorityRedact:
                 // This early return is to avoid masking the same exact area in row,
-                // something that is very common in SwiftUI and can impact performance.
+                // which can happen in layered view hierarchies and impact performance.
                 guard latestRegion?.canReplace(as: region) != true && imageRect.intersects(path.boundingBoxOfPath) else { continue }
                 (region.color ?? UIImageHelper.averageColor(of: context.currentImage, at: rect.applying(region.transform))).setFill()
                 context.cgContext.addPath(path)

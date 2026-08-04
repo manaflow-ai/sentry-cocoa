@@ -4,7 +4,7 @@ import Foundation
 import ObjectiveC.NSObjCRuntime
 import UIKit
 
-struct SentryRedactRegion: Equatable {
+struct SentryRedactRegion: Equatable, @unchecked Sendable {
     let size: CGSize
     let transform: CGAffineTransform
     let type: SentryRedactRegionType

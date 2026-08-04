@@ -92,7 +92,7 @@ public final class SentryAppStartTracker: NSObject, SentryFramesTrackerListener 
         // It can happen that the OS posts the didFinishLaunching notification before we register for it
         // or we just don't receive it. In this case the didFinishLaunchingTimestamp would be nil. As
         // the SDK should be initialized in application:didFinishLaunchingWithOptions: or in the init of
-        // @main of a SwiftUI we set the timestamp here.
+        // Applications without an Objective-C entry point set the timestamp here.
         didFinishLaunchingTimestamp = dateProvider.date()
 
         NotificationCenter.default.addObserver(
@@ -114,7 +114,7 @@ public final class SentryAppStartTracker: NSObject, SentryFramesTrackerListener 
         // posted, the notification is never received and no app start is
         // measured. 
         // There is no reliable way to detect if the notification was already posted.
-        // UIApplication.applicationState may be .active in SwiftUI apps during App.init(),
+        // UIApplication.applicationState may be active during early application initialization,
         if reportingStrategy is StandaloneTransactionStrategy {
             let traceId = SentryId()
             appStartTraceId = traceId

@@ -27,10 +27,22 @@ final class UserFeedbackIntegration<Dependencies: UserFeedbackIntegrationProvide
             return nil
         }
 
-        driver = SentryUserFeedbackIntegrationDriver(configuration: configuration, screenshotSource: screenshotSource, windowFactory: dependencies.windowFactory)
+        let windowFactory = SentryUncheckedSendable(dependencies.windowFactory)
+        driver = SentryMainActor.runSyncUnchecked {
+            SentryUserFeedbackIntegrationDriver(
+                configuration: configuration,
+                screenshotSource: screenshotSource,
+                windowFactory: windowFactory.value
+            )
+        }
     }
 
-    func uninstall() { /* Empty on purpose. Nothing to uninstall. */ }
+    func uninstall() {
+        let driver = driver
+        SentryMainActor.runSyncUnchecked {
+            driver.stop()
+        }
+    }
     
     static var name: String {
         "SentryUserFeedbackIntegration"

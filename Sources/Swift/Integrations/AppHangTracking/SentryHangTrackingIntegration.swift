@@ -7,7 +7,7 @@ import UIKit
 
 typealias HangTrackingIntegrationScope = DispatchQueueWrapperProvider & CrashWrapperProvider & ExtensionDetectorProvider & DebugImageProvider & ThreadInspectorProvider & FileManagerProvider & ANRTrackerBuilder
 
-final class SentryHangTrackingIntegration<Dependencies: HangTrackingIntegrationScope>: NSObject, SwiftIntegration, SentryANRTrackerDelegate {
+final class SentryHangTrackingIntegration<Dependencies: HangTrackingIntegrationScope>: NSObject, SwiftIntegration, SentryANRTrackerDelegate, @unchecked Sendable {
 
     let tracker: SentryANRTracker
     private let options: Options
@@ -173,11 +173,13 @@ final class SentryHangTrackingIntegration<Dependencies: HangTrackingIntegrationS
     }
 
     private func captureStoredAppHangEvent() {
-        dispatchQueueWrapper.dispatchAsync { [weak self] in
-            guard let self else { return }
-            guard let event = fileManager.readAppHangEvent() else { return }
-            fileManager.deleteAppHangEvent()
-            if crashWrapper.crashedLastLaunch {
+        let fileManager = SentryUncheckedSendable(fileManager)
+        let crashWrapper = SentryUncheckedSendable(crashWrapper)
+        let durationKey = sentryANRMechanismDataAppHangDuration
+        dispatchQueueWrapper.dispatchAsync {
+            guard let event = fileManager.value.readAppHangEvent() else { return }
+            fileManager.value.deleteAppHangEvent()
+            if crashWrapper.value.crashedLastLaunch {
                 SentrySDK.capture(event: event, scope: Scope())
             } else {
                 if event.exceptions?.count != 1 {
@@ -192,8 +194,8 @@ final class SentryHangTrackingIntegration<Dependencies: HangTrackingIntegrationS
                     event.exceptions?.first?.type = fatalExceptionType
                 }
                 var mechanismData = exception?.mechanism?.data ?? [:]
-                let appHangDurationInfo = mechanismData[sentryANRMechanismDataAppHangDuration] as? String
-                mechanismData.removeValue(forKey: sentryANRMechanismDataAppHangDuration)
+                let appHangDurationInfo = mechanismData[durationKey] as? String
+                mechanismData.removeValue(forKey: durationKey)
                 event.exceptions?.first?.mechanism?.data = mechanismData
                 let exceptionValue = "The user or the OS watchdog terminated your app while it blocked the main thread for \(appHangDurationInfo ?? "?")."
                 event.exceptions?.first?.value = exceptionValue

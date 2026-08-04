@@ -5,7 +5,12 @@ import Foundation
 
 typealias WatchdogTerminationTrackingProvider = ANRTrackerBuilder & ProcessInfoProvider & AppHangTrackerProvider & AppStateManagerProvider & WatchdogTerminationScopeObserverBuilder & WatchdogTerminationTrackerBuilder & ExtensionDetectorProvider
 
-final class SentryWatchdogTerminationTrackingIntegration<Dependencies: WatchdogTerminationTrackingProvider>: NSObject, SwiftIntegration, SentryANRTrackerDelegate {
+private struct SentryWatchdogTrackingState {
+    var hasStartedHang = false
+    var appHangTrackerObserverToken: SentryAppHangTrackerObserverToken?
+}
+
+final class SentryWatchdogTerminationTrackingIntegration<Dependencies: WatchdogTerminationTrackingProvider>: NSObject, SwiftIntegration, SentryANRTrackerDelegate, @unchecked Sendable {
 
     private let tracker: SentryWatchdogTerminationTracker
     private let timeoutInterval: TimeInterval
@@ -13,8 +18,7 @@ final class SentryWatchdogTerminationTrackingIntegration<Dependencies: WatchdogT
     private let appHangTracker: SentryAppHangTracker?
     private let appStateManager: SentryAppStateManager
 
-    private var hasStartedHang: Bool = false
-    private var appHangTrackerObserverToken: SentryAppHangTrackerObserverToken?
+    private let state = SentryMutex(SentryWatchdogTrackingState())
 
     init?(with options: Options, dependencies: Dependencies) {
         guard options.enableWatchdogTerminationTracking else {
@@ -56,16 +60,24 @@ final class SentryWatchdogTerminationTrackingIntegration<Dependencies: WatchdogT
         super.init()
 
         tracker.start()
-        appHangTrackerObserverToken = appHangTracker?.addObserver(threshold: options.appHangTimeoutInterval) { [weak self] hang in
-            guard let self else { return }
-
+        let observerState = state
+        let observerAppStateManager = SentryUncheckedSendable(appStateManager)
+        let observerToken = appHangTracker?.addObserver(threshold: options.appHangTimeoutInterval) { hang in
             switch hang.state {
             case .started:
-                hangStarted()
+                let shouldStart = observerState.withLock { state -> Bool in
+                    guard !state.hasStartedHang else { return false }
+                    state.hasStartedHang = true
+                    return true
+                }
+                guard shouldStart else { return }
+                observerAppStateManager.value.updateAppState { $0.isANROngoing = true }
             case .ended:
-                hangStopped()
+                observerState.withLock { $0.hasStartedHang = false }
+                observerAppStateManager.value.updateAppState { $0.isANROngoing = false }
             }
         }
+        state.withLock { $0.appHangTrackerObserverToken = observerToken }
         anrTracker?.add(listener: self)
 
         let scopeObserver = dependencies.getWatchdogTerminationScopeObserverWithOptions(options)
@@ -100,23 +112,26 @@ final class SentryWatchdogTerminationTrackingIntegration<Dependencies: WatchdogT
         tracker.stop()
         anrTracker?.remove(listener: self)
 
-        guard let appHangTrackerObserverToken else {
+        guard let appHangTrackerObserverToken = state.withLock({ $0.appHangTrackerObserverToken }) else {
             return
         }
         appHangTracker?.removeObserver(token: appHangTrackerObserverToken)
     }
 
     func hangStarted() {
-        guard !hasStartedHang else { return }
-
-        hasStartedHang = true
+        let shouldStart = state.withLock { state -> Bool in
+            guard !state.hasStartedHang else { return false }
+            state.hasStartedHang = true
+            return true
+        }
+        guard shouldStart else { return }
         appStateManager.updateAppState { appState in
             appState.isANROngoing = true
         }
     }
 
     func hangStopped() {
-        hasStartedHang = false
+        state.withLock { $0.hasStartedHang = false }
         appStateManager.updateAppState { appState in
             appState.isANROngoing = false
         }

@@ -1,7 +1,9 @@
 // swiftlint:disable missing_docs
 internal import _SentryPrivate
 
-@_spi(Private) @objc public class SentryFileManager: NSObject {
+/// File mutations delegated to background work use the injected serial queue. The Objective-C
+/// helper owns synchronization for its synchronous filesystem operations.
+@_spi(Private) @objc public class SentryFileManager: NSObject, @unchecked Sendable {
 
     @objc public var envelopeDeletedCallback: ((SentryEnvelopeItem, SentryDataCategory) -> Void)?
 
@@ -75,10 +77,10 @@ internal import _SentryPrivate
     }
 
     @objc public func deleteOldEnvelopeItems() {
-        let dateProvider = self.dateProvider
         dispatchQueue.dispatchAsync { [weak self] in
+            guard let self else { return }
             let now = dateProvider.date().timeIntervalSince1970
-            self?.helper.deleteOldEnvelopes(fromAllSentryPaths: now)
+            helper.deleteOldEnvelopes(fromAllSentryPaths: now)
         }
     }
     

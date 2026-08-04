@@ -46,22 +46,22 @@ public struct SentryInternalReplayApi {
     }
 
     /// Adds classes to the replay ignore list.
-    public func addIgnoreClasses(_ classes: [AnyClass]) {
+    @MainActor public func addIgnoreClasses(_ classes: [AnyClass]) {
         replayIntegrationProvider.getReplayIntegration()?.viewPhotographer.addIgnoreClasses(classes: classes)
     }
 
     /// Adds classes to the replay redact list.
-    public func addRedactClasses(_ classes: [AnyClass]) {
+    @MainActor public func addRedactClasses(_ classes: [AnyClass]) {
         replayIntegrationProvider.getReplayIntegration()?.viewPhotographer.addRedactClasses(classes: classes)
     }
 
     /// Sets the container class whose subviews are ignored during replay.
-    public func setIgnoreContainerClass(_ containerClass: AnyClass) {
+    @MainActor public func setIgnoreContainerClass(_ containerClass: AnyClass) {
         replayIntegrationProvider.getReplayIntegration()?.viewPhotographer.setIgnoreContainerClass(containerClass)
     }
 
     /// Sets the container class whose subviews are redacted during replay.
-    public func setRedactContainerClass(_ containerClass: AnyClass) {
+    @MainActor public func setRedactContainerClass(_ containerClass: AnyClass) {
         replayIntegrationProvider.getReplayIntegration()?.viewPhotographer.setRedactContainerClass(containerClass)
     }
 

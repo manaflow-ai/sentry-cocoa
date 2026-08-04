@@ -4,7 +4,7 @@ import UIKit
 
 /// Inspects the view hierarchy to detect ongoing activity (user interactions or animations)
 /// that should influence when ``SentrySessionReplay`` captures the next screenshot.
-enum SentrySessionReplayCaptureGuard {
+@MainActor enum SentrySessionReplayCaptureGuard {
     private static let activeAnimationThreshold = 4
 
     enum CaptureActivityReason {

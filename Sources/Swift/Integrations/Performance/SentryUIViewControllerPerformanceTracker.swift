@@ -2,13 +2,13 @@
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
 
 internal import _SentryPrivate
-import UIKit
+public import UIKit
 
 @_spi(Private) @objc public protocol SentryInitialDisplayReporting {
     func reportInitialDisplay()
 }
 
-@_spi(Private) @objc public final class SentrySwiftUISpanHelper: NSObject {
+@_spi(Private) @objc public final class SentryScreenSpanHelper: NSObject {
     @objc public let hasSpan: Bool
     
     @objc public func reportInitialDisplay() {
@@ -40,34 +40,34 @@ import UIKit
         helper.alwaysWaitForFullDisplay = newValue
     } }
     
-    @objc public func viewControllerLoadView(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerLoadView(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         let inAppLogic = self.inAppLogic
         helper.viewControllerLoadView(controller, isInApp: { c in
             inAppLogic.isClassInApp(c)
         }, callbackToOrigin: callback)
     }
     
-    @objc public func viewControllerViewDidLoad(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerViewDidLoad(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         helper.viewControllerViewDidLoad(controller, callbackToOrigin: callback)
     }
     
-    @objc public func viewControllerViewWillAppear(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerViewWillAppear(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         helper.viewControllerViewWillAppear(controller, callbackToOrigin: callback)
     }
     
-    @objc public func viewControllerViewWillDisappear(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerViewWillDisappear(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         helper.viewControllerViewWillDisappear(controller, callbackToOrigin: callback)
     }
 
-    @objc public func viewControllerViewDidAppear(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerViewDidAppear(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         helper.viewControllerViewDidAppear(controller, callbackToOrigin: callback)
     }
 
-    @objc public func viewControllerViewWillLayoutSubViews(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerViewWillLayoutSubViews(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         helper.viewControllerViewWillLayoutSubViews(controller, callbackToOrigin: callback)
     }
 
-    @objc public func viewControllerViewDidLayoutSubViews(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
+    @MainActor @objc public func viewControllerViewDidLayoutSubViews(_ controller: UIViewController, callbackToOrigin callback: @escaping () -> Void) {
         helper.viewControllerViewDidLayoutSubViews(controller, callbackToOrigin: callback)
     }
 
@@ -78,9 +78,9 @@ import UIKit
     @objc public func startTimeToDisplayTracker(
         forScreen screenName: String,
         waitForFullDisplay: Bool,
-        transactionId: SpanId) -> SentrySwiftUISpanHelper {
+        transactionId: SpanId) -> SentryScreenSpanHelper {
             let objcType = helper.startTimeToDisplay(forScreen: screenName, waitForFullDisplay: waitForFullDisplay, transactionId: transactionId)
-            return SentrySwiftUISpanHelper(hasSpan: objcType.hasSpan) {
+            return SentryScreenSpanHelper(hasSpan: objcType.hasSpan) {
                 objcType.reportInitialDisplay()
             }
         }

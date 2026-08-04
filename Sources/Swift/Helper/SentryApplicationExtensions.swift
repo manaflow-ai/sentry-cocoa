@@ -6,110 +6,69 @@
 @_spi(Private) @objc public final class PlaceholderSentryApplication: NSObject { }
 
 #if !os(macOS) && !os(watchOS) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 
-@objc @_spi(Private) extension UIApplication: SentryApplication {
-
-    @objc public func getKeyWindow() -> UIWindow? {
-        internal_getKeyWindow()
-    }
-
-    @objc public func getWindows() -> [UIWindow]? {
-        internal_getWindows()
-    }
-    
-#if (os(iOS) || os(tvOS))
-    @objc public func getActiveWindowSize() -> CGSize {
-        internal_getActiveWindowSize()
-    }
-#endif // os(iOS) || os(tvOS)
-    
-    @objc public func relevantViewControllersNames() -> [String]? {
-        internal_relevantViewControllersNames()
-    }
-    
-    @objc public var unsafeApplicationState: State {
-        applicationState
-    }
-    
-    @objc public var mainThread_isActive: Bool {
+@objc @_spi(Private) public final class SentryUIKitApplication: NSObject, SentryApplication, @unchecked Sendable {
+    public var mainThread_isActive: Bool {
         unsafeApplicationState == .active
+    }
+
+    public var unsafeApplicationState: UIApplication.State {
+        SentryMainActor.runSync { UIApplication.shared.applicationState }
+    }
+
+    public func getKeyWindow() -> UIWindow? {
+        SentryMainActor.runSyncUnchecked { Self.activeWindows().first(where: \.isKeyWindow) }
+    }
+
+    public func getWindows() -> [UIWindow]? {
+        SentryMainActor.runSyncUnchecked { Self.activeWindows() }
+    }
+
+#if os(iOS) || os(tvOS)
+    public func getActiveWindowSize() -> CGSize {
+        SentryMainActor.runSync { Self.activeWindows().first?.screen.bounds.size ?? .zero }
+    }
+
+    public func getMaximumFramesPerSecond() -> Int {
+        SentryMainActor.runSync { Self.activeWindows().first?.screen.maximumFramesPerSecond ?? 60 }
+    }
+#endif
+
+    public func relevantViewControllersNames() -> [String]? {
+        SentryMainActor.runSync {
+            let viewControllers = self.internal_relevantViewControllers() ?? []
+            return viewControllers.map { SwiftDescriptor.getViewControllerClassName($0) }
+        }
+    }
+
+    @MainActor
+    private static func activeWindows() -> [UIWindow] {
+        var windows = Set<UIWindow>()
+        let application = UIApplication.shared
+
+        for scene in application.connectedScenes where scene.activationState == .foregroundActive {
+            guard let delegate = scene.delegate as? UIWindowSceneDelegate,
+                  let optionalWindow = delegate.window,
+                  let window = optionalWindow else {
+                continue
+            }
+            windows.insert(window)
+        }
+
+        if let delegate = application.delegate,
+           let optionalWindow = delegate.window,
+           let window = optionalWindow {
+            windows.insert(window)
+        } else if windows.isEmpty {
+            SentrySDKLog.debug("No application delegate found.")
+        }
+
+        return Array(windows)
     }
 }
 
-extension SentryApplication {
-    public func internal_getKeyWindow() -> UIWindow? {
-        var keyWindow: UIWindow?
-        Dependencies.dispatchQueueWrapper.dispatchSyncOnMainQueue({ [weak self] in
-            guard let self else { return }
-            keyWindow = self.getWindows()?.first(where: \.isKeyWindow)
-        }, timeout: 0.01)
-        return keyWindow
-    }
-
-    // This cannot be declared with @objc so until we delete more ObjC code it needs a separate
-    // function than the objc visible one.
-    public func internal_getWindows() -> [UIWindow]? {
-        var windows = Set<UIWindow>()
-        Dependencies.dispatchQueueWrapper.dispatchSyncOnMainQueue({ [weak self] in
-            guard let self else { return }
-
-            // For each active scene we get the window
-            let scenes = self.connectedScenes
-            for scene in scenes {
-                if scene.activationState == .foregroundActive {
-                    if
-                        let delegate = scene.delegate as? UIWindowSceneDelegate,
-                        let window = delegate.window {
-                        if let window {
-                            windows.insert(window)
-                        }
-                    }
-                }
-            }
-
-            // If no scenes are given, we try to find the window of the application delegate
-            guard let delegate else {
-                SentrySDKLog.debug("No application delegate found.")
-                return
-            }
-
-            // If scenes are not used, we fallback to the default UIApplicationDelegate.window.
-            // The property is of type UIWindow?? so we need to unwrap both optional layers.
-            if let optionalWindow = delegate.window, let window = optionalWindow {
-                windows.insert(window)
-            }
-        }, timeout: 0.01)
-        return Array(windows)
-    }
-    
-#if (os(iOS) || os(tvOS))
-    public func internal_getActiveWindowSize() -> CGSize {
-        var size = CGSize.zero
-        Dependencies.dispatchQueueWrapper.dispatchSyncOnMainQueue({ [weak self] in
-            guard let self,
-                  let window = self.internal_getWindows()?.first else {
-                return
-            }
-            
-            size = window.screen.bounds.size
-        }, timeout: 0.01)
-        return size
-    }
-#endif // os(iOS) || os(tvOS)
-    
-    // This cannot be declared with @objc so until we delete more ObjC code it needs a separate
-    // function than the objc visible one.
-    public func internal_relevantViewControllersNames() -> [String]? {
-        var result: [String]?
-        Dependencies.dispatchQueueWrapper.dispatchSyncOnMainQueue({ [weak self] in
-            guard let self else { return }
-            let viewControllers = self.internal_relevantViewControllers() ?? []
-            result = viewControllers.map { SwiftDescriptor.getViewControllerClassName($0) }
-        }, timeout: 0.01)
-        return result
-    }
-    
+@MainActor extension SentryApplication {
     func internal_relevantViewControllers(windowFilter: (UIWindow) -> Bool = { _ in true }) -> [UIViewController]? {
         let windows = getWindows()?.filter(windowFilter)
         guard !(windows?.isEmpty ?? true) else { return nil }
@@ -209,9 +168,12 @@ extension SentryApplication {
 #endif
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst) && !SENTRY_NO_UI_FRAMEWORK
-@objc @_spi(Private) extension NSApplication: SentryApplication {
+/// Bridges AppKit's main-actor singleton into Sentry's synchronous application protocol.
+/// Callers already require the property to run on the main thread, so the runtime assertion
+/// documents and enforces the isolation boundary.
+@objc @_spi(Private) public final class SentryAppKitApplication: NSObject, SentryApplication, @unchecked Sendable {
     public var mainThread_isActive: Bool {
-        isActive
+        MainActor.assumeIsolated { NSApplication.shared.isActive }
     }
 }
 #endif

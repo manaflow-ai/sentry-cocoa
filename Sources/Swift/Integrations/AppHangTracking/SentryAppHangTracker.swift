@@ -1,4 +1,4 @@
-typealias SentryAppHangTrackerHandler = (_ hang: SentryAppHang) -> Void
+typealias SentryAppHangTrackerHandler = @Sendable (_ hang: SentryAppHang) -> Void
 typealias SentryAppHangTrackerObserverToken = UUID
 
 // In test/debug builds we use a protocol so that the tracker can be replaced with a mock.
@@ -20,7 +20,9 @@ typealias SentryAppHangTracker = SentryDefaultAppHangTracker
 /// only when the accumulated delay exceeds that observer's configured threshold.
 /// Each observer receives at most one `.started` notification per hang,
 /// followed by one `.ended` when the hang resolves.
-final class SentryDefaultAppHangTracker {
+/// Lifecycle fields are main-queue confined. The background delay callback only enters
+/// `processDelay`, whose observer state is protected by `SentryMutex`.
+final class SentryDefaultAppHangTracker: @unchecked Sendable {
     // MARK: - Types
 
     private struct ObserverEntry {

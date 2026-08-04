@@ -3,7 +3,7 @@
 import AppKit
 #endif
 #if canImport(UIKit) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 #endif
 
 @objc @_spi(Private) public protocol SentryApplication {
@@ -29,11 +29,8 @@ import UIKit
 
 #if (os(iOS) || os(tvOS))
     func getActiveWindowSize() -> CGSize
+    func getMaximumFramesPerSecond() -> Int
 #endif // os(iOS) || os(tvOS)
-
-    var connectedScenes: Set<UIScene> { get }
-
-    var delegate: UIApplicationDelegate? { get }
 
     /**
      * Use @c [SentryUIApplication relevantViewControllers] and convert the

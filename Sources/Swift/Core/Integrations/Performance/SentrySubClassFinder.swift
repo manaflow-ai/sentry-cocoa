@@ -3,7 +3,7 @@ internal import _SentryPrivate
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
 import UIKit
 
-class SentrySubClassFinder: NSObject {
+final class SentrySubClassFinder: NSObject, @unchecked Sendable {
     private let dispatchQueue: SentryDispatchQueueWrapper
     private let objcRuntimeWrapper: SentryObjCRuntimeWrapper
     private let swizzleClassNameExcludes: Set<String>
@@ -27,7 +27,10 @@ class SentrySubClassFinder: NSObject {
     /// - Parameters:
     ///   - imageName: The objc Image (library) to get all subclasses for.
     ///   - block: The block to execute for each subclass. This block runs on the main thread.
-    func actOnSubclassesOfViewController(inImage imageName: String, block: @escaping (AnyClass) -> Void) {
+    func actOnSubclassesOfViewController(
+        inImage imageName: String,
+        block: @escaping @MainActor @Sendable (AnyClass) -> Void
+    ) {
         dispatchQueue.dispatchAsync {
             SentrySDKLog.debug("ActOnSubclassesOfViewControllerInImage: \(imageName)")
 
@@ -89,16 +92,19 @@ class SentrySubClassFinder: NSObject {
                 return
             }
 
+            let classNames = classesToSwizzle
             self.dispatchQueue.dispatchAsyncOnMainQueueIfNotMainThread {
-                for className in classesToSwizzle {
-                    if let cls = NSClassFromString(className) {
-                        block(cls)
+                MainActor.assumeIsolated {
+                    for className in classNames {
+                        if let cls = NSClassFromString(className) {
+                            block(cls)
+                        }
                     }
-                }
 
-                SentrySDKLog.debug(
-                    "The following UIViewControllers for image: \(imageName) will generate automatic transactions: \(classesToSwizzle.joined(separator: ", "))"
-                )
+                    SentrySDKLog.debug(
+                        "The following UIViewControllers for image: \(imageName) will generate automatic transactions: \(classNames.joined(separator: ", "))"
+                    )
+                }
             }
         }
     }

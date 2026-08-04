@@ -15,6 +15,6 @@ public enum SentryRedactRegionType: String, Codable, Equatable {
     /// Used after processing every child of a view that clips to its bounds.
     case clipEnd = "clip_end"
 
-    /// These regions are redacted first, there is no way to avoid it.
-    case redactSwiftUI = "redact_swiftui"
+    /// Redacts the region before ordinary hierarchy-derived regions.
+    case priorityRedact = "priority_redact"
 }

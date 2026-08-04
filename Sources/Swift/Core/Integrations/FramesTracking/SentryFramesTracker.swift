@@ -17,7 +17,10 @@ public protocol SentryFramesTrackerListener: NSObjectProtocol {
 }
 
 @_spi(Private) @objc
-public class SentryFramesTracker: NSObject {
+public class SentryFramesTracker: NSObject, @unchecked Sendable {
+
+    // Mutable frame state and listener membership are confined to the main
+    // queue. `_isRunning` is the sole cross-thread value and is mutex-backed.
 
     private var isStarted: Bool = false
 

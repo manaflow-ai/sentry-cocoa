@@ -1,35 +1,47 @@
 // swiftlint:disable missing_docs
 import Foundation
 
-typealias SentryLogOutput = ((String) -> Void)
+public typealias SentryLogOutput = @Sendable (String) -> Void
 
-/// A note on the thread safety:
-/// The methods configure and log don't use synchronization mechanisms, meaning they aren't strictly speaking thread-safe.
-/// Still, you can use log from multiple threads. The problem is that when you call configure while
-/// calling log from multiple threads, you experience a race condition. It can take a bit until all
-/// threads know the new config. As the SDK should only call configure once when starting, we do accept
-/// this race condition. Adding locks for evaluating the log level for every log invocation isn't
-/// acceptable, as this adds a significant overhead for every log call. Therefore, we exclude SentryLog
-/// from the ThreadSanitizer as it produces false positives. The tests call configure multiple times,
-/// and the thread sanitizer would surface these race conditions. We accept these race conditions for
-/// the log messages in the tests over adding locking for all log messages.
+/// Logging state is protected by `SentryMutex`, so configuration and output changes are immediately
+/// visible to every thread without racing concurrent log calls.
 @objc
 @_spi(Private) public final class SentrySDKLog: NSObject {
 
-    static private(set) var isDebug = true
-    static private(set) var diagnosticLevel = SentryLevel.error
+    private struct State {
+        var isDebug = true
+        var diagnosticLevel = SentryLevel.error
+        var logOutput: SentryLogOutput
+        var dateProvider: SentryCurrentDateProvider
+    }
+
+    private static let defaultLogOutput: SentryLogOutput = { print($0) }
+    private static let state = SentryMutex(
+        State(
+            logOutput: defaultLogOutput,
+            dateProvider: SentryDefaultCurrentDateProvider()
+        )
+    )
+
+    static private(set) var isDebug: Bool {
+        get { state.withLock { $0.isDebug } }
+        set { state.withLock { $0.isDebug = newValue } }
+    }
+
+    static private(set) var diagnosticLevel: SentryLevel {
+        get { state.withLock { $0.diagnosticLevel } }
+        set { state.withLock { $0.diagnosticLevel = newValue } }
+    }
 
     /**
      * Threshold log level to always log, regardless of the current configuration
      */
     static let alwaysLevel = SentryLevel.fatal
-    private static let defaultLogOutput: SentryLogOutput = { print($0) }
-    private static var logOutput: SentryLogOutput = defaultLogOutput
-    private static var dateProvider: SentryCurrentDateProvider = SentryDefaultCurrentDateProvider()
-
     static func _configure(_ isDebug: Bool, diagnosticLevel: SentryLevel) {
-        self.isDebug = isDebug
-        self.diagnosticLevel = diagnosticLevel
+        state.withLock {
+            $0.isDebug = isDebug
+            $0.diagnosticLevel = diagnosticLevel
+        }
     }
 
     @objc
@@ -40,8 +52,10 @@ typealias SentryLogOutput = ((String) -> Void)
         // expensive and we only care about the time difference between the
         // log messages. We don't use system uptime because of privacy concerns
         // see: NSPrivacyAccessedAPICategorySystemBootTime.
-        let time = self.dateProvider.date().timeIntervalSince1970
-        logOutput("[Sentry] [\(level)] [\(time)] \(message)")
+        let (time, output) = state.withLock {
+            ($0.dateProvider.date().timeIntervalSince1970, $0.logOutput)
+        }
+        output("[Sentry] [\(level)] [\(time)] \(message)")
     }
 
     /**
@@ -56,7 +70,9 @@ typealias SentryLogOutput = ((String) -> Void)
         if level.rawValue >= alwaysLevel.rawValue {
             return true
         }
-        return isDebug && level.rawValue >= diagnosticLevel.rawValue
+        return state.withLock {
+            $0.isDebug && level.rawValue >= $0.diagnosticLevel.rawValue
+        }
     }
 
     /// Sets a custom log output handler. This allows hybrid SDKs (React Native, Flutter, etc.)
@@ -65,20 +81,20 @@ typealias SentryLogOutput = ((String) -> Void)
     /// - Parameter output: A closure to handle log output. If `nil` is passed (which can happen
     ///   from Objective-C callers despite nullability annotations), the default `print` handler is used.
     @objc
-    public static func setOutput(_ output: ((String) -> Void)?) {
+    public static func setOutput(_ output: SentryLogOutput?) {
         // Objective-C callers can pass nil at runtime despite NS_ASSUME_NONNULL annotations.
         // Fall back to default print handler to prevent crashes when logging.
-        logOutput = output ?? defaultLogOutput
+        state.withLock { $0.logOutput = output ?? defaultLogOutput }
     }
 
     #if SENTRY_TEST || SENTRY_TEST_CI
 
         static func getOutput() -> SentryLogOutput {
-            return logOutput
+            state.withLock { $0.logOutput }
         }
 
         static func setDateProvider(_ dateProvider: SentryCurrentDateProvider) {
-            self.dateProvider = dateProvider
+            state.withLock { $0.dateProvider = dateProvider }
         }
 
     #endif

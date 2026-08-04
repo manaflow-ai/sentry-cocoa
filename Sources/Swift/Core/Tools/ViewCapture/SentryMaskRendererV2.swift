@@ -3,7 +3,7 @@
 
 import UIKit
 
-final class SentryMaskRendererV2: SentryDefaultMaskRenderer {
+final class SentryMaskRendererV2: SentryDefaultMaskRenderer, @unchecked Sendable {
     override func maskScreenshot(screenshot image: UIImage, size: CGSize, masking: [SentryRedactRegion]) -> UIImage {
         // The `SentryDefaultMaskRenderer` is also using an display scale of 1, therefore we also use 1 here.
         // This could be evaluated in future iterations to view performance impact vs quality.

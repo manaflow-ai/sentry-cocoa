@@ -2,7 +2,7 @@
 import Foundation
 
 @objcMembers
-@_spi(Private) public class SentryVideoInfo: NSObject {
+@_spi(Private) public final class SentryVideoInfo: NSObject, @unchecked Sendable {
     
     public let path: URL
     let height: Int

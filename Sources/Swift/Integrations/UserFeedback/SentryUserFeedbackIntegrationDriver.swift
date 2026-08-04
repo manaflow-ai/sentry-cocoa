@@ -9,7 +9,7 @@ import UIKit
  * - note: The managed widget is deprecated and will be removed in v10; prefer presenting the form from your own UI.
  */
 @available(iOSApplicationExtension, unavailable)
-final class SentryUserFeedbackIntegrationDriver: NSObject {
+@MainActor final class SentryUserFeedbackIntegrationDriver: NSObject {
     let configuration: SentryUserFeedbackConfiguration
     private weak var activeForm: SentryUserFeedbackFormController?
     private var isObservingShakeGesture = false
@@ -44,11 +44,8 @@ final class SentryUserFeedbackIntegrationDriver: NSObject {
             widgetConfigBuilder(configuration.widgetConfig)
             validate(configuration.widgetConfig)
 
-            /*
-             * We cannot currently automatically inject a widget into a SwiftUI application, because at the recommended time to start the Sentry SDK (SwiftUIApp.init) there is nowhere to put a UIWindow overlay. SwiftUI apps must currently declare a UIApplicationDelegateAdaptor that returns a UISceneConfiguration, which we can then extract a connected UIScene from into which we can inject a UIWindow.
-             *
-             * At the time this integration is being installed, if there is no UIApplicationDelegate and no connected UIScene, it is very likely we are in a SwiftUI app, but it's possible we could instead be in a UIKit app that has some nonstandard launch procedure or doesn't call SentrySDK.start in a place we expect/recommend, in which case they will need to manually display the widget when they're ready by calling SentrySDK.feedback.showWidget. The managed widget is deprecated; prefer presenting the feedback form from your own UI using SentrySDK.feedback.show(), SentrySDK.FeedbackForm, or sentryFeedback(isPresented:).
-             */
+            // Automatic widget injection needs either an application delegate or a connected scene.
+            // Apps with a nonstandard launch sequence can display the feedback form explicitly.
             if UIApplication.shared.connectedScenes.isEmpty && UIApplication.shared.delegate == nil {
                 observeScreenshots()
                 observeShakeGesture()
@@ -65,7 +62,7 @@ final class SentryUserFeedbackIntegrationDriver: NSObject {
         observeShakeGesture()
     }
 
-    deinit {
+    func stop() {
         #if !SDK_V10
         customButton?.removeTarget(self, action: #selector(showForm(sender:)), for: .touchUpInside)
         #endif

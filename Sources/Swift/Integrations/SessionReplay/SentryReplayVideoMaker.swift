@@ -1,13 +1,13 @@
 // swiftlint:disable missing_docs
 #if canImport(UIKit) && !SENTRY_NO_UI_FRAMEWORK
 import Foundation
-import UIKit
+public import UIKit
 
 @objc
 @_spi(Private) public protocol SentryReplayVideoMaker: NSObjectProtocol {
     func addFrameAsync(timestamp: Date, maskedViewImage: UIImage, forScreen: String?)
     func releaseFramesUntil(_ date: Date)
-    func createVideoInBackgroundWith(beginning: Date, end: Date, completion: @escaping ([SentryVideoInfo]) -> Void)
+    func createVideoInBackgroundWith(beginning: Date, end: Date, completion: @escaping @Sendable ([SentryVideoInfo]) -> Void)
     func createVideoWith(beginning: Date, end: Date) -> [SentryVideoInfo]
 }
 

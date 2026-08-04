@@ -2,17 +2,17 @@
 #if canImport(UIKit) && !SENTRY_NO_UI_FRAMEWORK
 #if os(iOS) || os(tvOS)
 import Foundation
-import UIKit
+public import UIKit
 #if os(iOS)
 import WebKit
 #endif
 
-@objcMembers
+@MainActor @objcMembers
 @_spi(Private) public final class SentryRedactViewHelper: NSObject {
     private static let associatedRedactObjectKey = AssociatedObjectAccessor<Bool>.Key()
     private static let associatedIgnoreObjectKey = AssociatedObjectAccessor<Bool>.Key()
     private static let associatedClipOutObjectKey = AssociatedObjectAccessor<Bool>.Key()
-    private static let associatedSwiftUIRedactObjectKey = AssociatedObjectAccessor<Bool>.Key()
+    private static let associatedPriorityRedactObjectKey = AssociatedObjectAccessor<Bool>.Key()
 
     override private init() {}
 
@@ -40,12 +40,12 @@ import WebKit
         accessor(on: view, key: associatedClipOutObjectKey).set(true)
     }
 
-    static func shouldRedactSwiftUI(_ view: UIView) -> Bool {
-        value(on: view, key: associatedSwiftUIRedactObjectKey)
+    static func shouldPriorityRedact(_ view: UIView) -> Bool {
+        value(on: view, key: associatedPriorityRedactObjectKey)
     }
 
-    static public func maskSwiftUI(_ view: UIView) {
-        accessor(on: view, key: associatedSwiftUIRedactObjectKey).set(true)
+    static public func priorityMaskView(_ view: UIView) {
+        accessor(on: view, key: associatedPriorityRedactObjectKey).set(true)
     }
 
     private static func accessor(

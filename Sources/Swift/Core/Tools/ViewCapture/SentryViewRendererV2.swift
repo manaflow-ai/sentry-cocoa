@@ -11,6 +11,7 @@ final class SentryViewRendererV2: NSObject, SentryViewRenderer {
         self.enableFastViewRendering = enableFastViewRendering
     }
 
+    @MainActor
     func render(view: UIView) -> UIImage {
         let scale = (view as? UIWindow ?? view.window)?.screen.scale ?? 1
         let image = SentryGraphicsImageRenderer(size: view.bounds.size, scale: scale).image { context in

@@ -27,19 +27,28 @@ public protocol SentryReachabilityObserver: NSObjectProtocol {
 
 // MARK: - SentryReachability
 @_spi(Private) @objc
-public class SentryReachability: NSObject {
-    private var reachabilityObservers = NSHashTable<SentryReachabilityObserver>.weakObjects()
-    private var currentConnectivity: SentryConnectivity = .none
-    private var pathMonitor: NWPathMonitor?
+public class SentryReachability: NSObject, @unchecked Sendable {
+    private struct State {
+        var reachabilityObservers = NSHashTable<SentryReachabilityObserver>.weakObjects()
+        var currentConnectivity: SentryConnectivity = .none
+        var pathMonitor: NWPathMonitor?
+#if DEBUG || SENTRY_TEST || SENTRY_TEST_CI
+        var skipRegisteringActualCallbacks = false
+        var ignoreActualCallback = false
+#endif
+    }
+
+    private let state = SentryMutex(State())
     private let reachabilityQueue: DispatchQueue = DispatchQueue(label: "io.sentry.cocoa.connectivity", qos: .background, attributes: [])
-    private let observersLock = NSRecursiveLock()
     
 #if DEBUG || SENTRY_TEST || SENTRY_TEST_CI
-    @objc public var skipRegisteringActualCallbacks = false
-    private var ignoreActualCallback = false
+    @objc public var skipRegisteringActualCallbacks: Bool {
+        get { state.withLock { $0.skipRegisteringActualCallbacks } }
+        set { state.withLock { $0.skipRegisteringActualCallbacks = newValue } }
+    }
     
     public var pathMonitorIsNil: Bool {
-        return pathMonitor == nil
+        state.withLock { $0.pathMonitor == nil }
     }
 #endif // DEBUG || SENTRY_TEST || SENTRY_TEST_CI
     
@@ -47,81 +56,88 @@ public class SentryReachability: NSObject {
     public func add(_ observer: SentryReachabilityObserver) {
         SentrySDKLog.debug("Adding observer: \(observer)")
         
-        observersLock.lock()
-        defer { observersLock.unlock() }
-        
-        SentrySDKLog.debug("Synchronized to add observer: \(observer)")
-        
-        if reachabilityObservers.contains(observer) {
-            SentrySDKLog.debug("Observer already added. Doing nothing.")
-            return
-        }
-        
-        reachabilityObservers.add(observer)
-        
-        if reachabilityObservers.count > 1 {
-            SentrySDKLog.debug("More than one observer added. Doing nothing.")
-            return
-        }
-        
+        let monitor = state.withLock { state -> NWPathMonitor? in
+            SentrySDKLog.debug("Synchronized to add observer: \(observer)")
+
+            if state.reachabilityObservers.contains(observer) {
+                SentrySDKLog.debug("Observer already added. Doing nothing.")
+                return nil
+            }
+
+            state.reachabilityObservers.add(observer)
+
+            if state.reachabilityObservers.count > 1 {
+                SentrySDKLog.debug("More than one observer added. Doing nothing.")
+                return nil
+            }
+
 #if DEBUG || SENTRY_TEST || SENTRY_TEST_CI
-        if skipRegisteringActualCallbacks {
-            SentrySDKLog.debug("Skip registering actual callbacks")
-            return
-        }
+            if state.skipRegisteringActualCallbacks {
+                SentrySDKLog.debug("Skip registering actual callbacks")
+                return nil
+            }
 #endif // DEBUG || SENTRY_TEST || SENTRY_TEST_CI
-        
-        self.currentConnectivity = .none
-        self.pathMonitor = NWPathMonitor()
-        self.pathMonitor?.pathUpdateHandler = self.pathUpdateHandler
-        self.pathMonitor?.start(queue: self.reachabilityQueue)
+
+            state.currentConnectivity = .none
+            let monitor = NWPathMonitor()
+            state.pathMonitor = monitor
+            return monitor
+        }
+
+        monitor?.pathUpdateHandler = { [weak self] path in
+            self?.pathUpdateHandler(path)
+        }
+        monitor?.start(queue: reachabilityQueue)
     }
     
     @objc(removeObserver:)
     public func remove(_ observer: SentryReachabilityObserver) {
         SentrySDKLog.debug("Removing observer: \(observer)")
         
-        observersLock.synchronized {
+        let monitorToCancel = state.withLock { state -> NWPathMonitor? in
             SentrySDKLog.debug("Synchronized to remove observer: \(observer)")
-            reachabilityObservers.remove(observer)
-            
-            if reachabilityObservers.count == 0 {
-                stopMonitoring()
+            state.reachabilityObservers.remove(observer)
+
+            if state.reachabilityObservers.count == 0 {
+                return stopMonitoring(state: &state)
             }
+            return nil
         }
+        monitorToCancel?.cancel()
     }
     
     @objc
     public func removeAllObservers() {
         SentrySDKLog.debug("Removing all observers.")
         
-        observersLock.synchronized {
+        let monitorToCancel = state.withLock { state -> NWPathMonitor? in
             SentrySDKLog.debug("Synchronized to remove all observers.")
-            reachabilityObservers.removeAllObjects()
-            stopMonitoring()
+            state.reachabilityObservers.removeAllObjects()
+            return stopMonitoring(state: &state)
         }
+        monitorToCancel?.cancel()
     }
-    
-    private func stopMonitoring() {
+
+    private func stopMonitoring(state: inout State) -> NWPathMonitor? {
 #if DEBUG || SENTRY_TEST || SENTRY_TEST_CI
-        if skipRegisteringActualCallbacks {
+        if state.skipRegisteringActualCallbacks {
             SentrySDKLog.debug("Skip stopping actual monitoring")
         }
 #endif // DEBUG || SENTRY_TEST || SENTRY_TEST_CI
-        
-        // Clean up NWPathMonitor
-        if let monitor = pathMonitor {
+
+        if let monitor = state.pathMonitor {
             SentrySDKLog.debug("Stopping NWPathMonitor")
-            monitor.cancel()
-            pathMonitor = nil
+            state.pathMonitor = nil
+            return monitor
         }
+        return nil
     }
     
     private func pathUpdateHandler(_ path: NWPath) {
         SentrySDKLog.debug("SentryPathUpdateHandler called with path status: \(path.status)")
         
 #if DEBUG || SENTRY_TEST || SENTRY_TEST_CI
-        if ignoreActualCallback {
+        if state.withLock({ $0.ignoreActualCallback }) {
             SentrySDKLog.debug("Ignoring actual callback.")
             return
         }
@@ -158,8 +174,13 @@ public class SentryReachability: NSObject {
         //
         // By copying the observers list and releasing observersLock before notifying, we ensure this method
         // never holds observersLock while calling observer code that might acquire other locks.
-        let (observersToNotify, previousConnectivity) = observersLock.synchronized {
-            (reachabilityObservers.allObjects, currentConnectivity)
+        let (observersToNotify, previousConnectivity) = state.withLock { state in
+            let snapshot = state.reachabilityObservers.allObjects
+            let previousConnectivity = state.currentConnectivity
+            if !snapshot.isEmpty {
+                state.currentConnectivity = connectivity
+            }
+            return (snapshot, previousConnectivity)
         }
         
         SentrySDKLog.debug("Entered synchronized region of SentryConnectivityCallback with connectivity: \(connectivity.toString())")
@@ -169,8 +190,7 @@ public class SentryReachability: NSObject {
             return
         }
         
-        currentConnectivity = connectivity
-        guard connectivityShouldReportChange(previousConnectivity, currentConnectivity) else {
+        guard connectivityShouldReportChange(previousConnectivity, connectivity) else {
             return
         }
         
@@ -205,7 +225,7 @@ public class SentryReachability: NSObject {
 extension SentryReachability {
     func setReachabilityIgnoreActualCallback(_ value: Bool) {
         SentrySDKLog.debug("Setting ignore actual callback to \(value)")
-        ignoreActualCallback = value
+        state.withLock { $0.ignoreActualCallback = value }
     }
     
     func triggerConnectivityCallback(_ connectivity: SentryConnectivity) {

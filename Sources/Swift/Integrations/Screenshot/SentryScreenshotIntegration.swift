@@ -2,10 +2,6 @@ internal import _SentryPrivate
 
 #if (os(iOS) || os(tvOS)) && !SENTRY_NO_UI_FRAMEWORK
 
-// We need to use a global variable because C doesn't allow capturing var
-// nor we want to continue using the DependencyContainer
-private weak var globalScreenshotSource: SentryScreenshotSource?
-
 final class SentryScreenshotIntegration<Dependencies: ScreenshotIntegrationProvider>: NSObject, SwiftIntegration, SentryClientAttachmentProcessor {
     private let options: Options
     private let screenshotSource: SentryScreenshotSource
@@ -32,17 +28,9 @@ final class SentryScreenshotIntegration<Dependencies: ScreenshotIntegrationProvi
             client.addAttachmentProcessor(self)
         }
 
-        globalScreenshotSource = screenshotSource
-        sentrycrash_setSaveScreenshots { path in
-            guard let path = path else { return }
-            let reportPath = String(cString: path)
-            globalScreenshotSource?.saveScreenShots(reportPath)
-        }
     }
 
     func uninstall() {
-        globalScreenshotSource = nil
-        sentrycrash_setSaveScreenshots(nil)
         client?.removeAttachmentProcessor(self)
     }
 

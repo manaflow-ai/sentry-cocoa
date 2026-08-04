@@ -16,7 +16,7 @@ public struct SentryInternalScreenshotApi {
 
     /// Captures screenshots of all application windows.
     public func capture() -> [Data]? {
-        screenshotProvider?.appScreenshotsData()
+        screenshotProvider?.appScreenshotDatasFromMainThread()
     }
 }
 

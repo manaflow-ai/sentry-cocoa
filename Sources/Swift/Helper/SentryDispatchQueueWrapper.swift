@@ -2,13 +2,13 @@
 internal import _SentryPrivate
 
 protocol SentryDispatchQueueWrapperProtocol {
-    func dispatchSync(_ block: @escaping () -> Void)
-    func dispatchAsync(_ block: @escaping () -> Void)
-    func dispatch(after interval: TimeInterval, block: @escaping () -> Void)
-    func dispatchAsyncOnMainQueueIfNotMainThread(block: @escaping () -> Void)
-    func dispatchSyncOnMainQueue(block: @escaping () -> Void)
-    func dispatchSyncOnMainQueue(_ block: @escaping () -> Void, timeout: Double)
-    func dispatchOnce(_ predicate: UnsafeMutablePointer<CLong>, block: @escaping () -> Void)
+    func dispatchSync(_ block: @escaping @Sendable () -> Void)
+    func dispatchAsync(_ block: @escaping @Sendable () -> Void)
+    func dispatch(after interval: TimeInterval, block: @escaping @Sendable () -> Void)
+    func dispatchAsyncOnMainQueueIfNotMainThread(block: @escaping @Sendable () -> Void)
+    func dispatchSyncOnMainQueue(block: @escaping @Sendable () -> Void)
+    func dispatchSyncOnMainQueue(_ block: @escaping @Sendable () -> Void, timeout: Double)
+    func dispatchOnce(_ predicate: UnsafeMutablePointer<CLong>, block: @escaping @Sendable () -> Void)
     func dispatch(after interval: TimeInterval, workItem: DispatchWorkItem)
 }
 
@@ -44,33 +44,33 @@ protocol SentryDispatchQueueWrapperProtocol {
     }
 
     @objc(dispatchAsyncWithBlock:)
-    public func dispatchAsync(_ block: @escaping () -> Void) {
+    public func dispatchAsync(_ block: @escaping @Sendable () -> Void) {
         internalWrapper.dispatchAsync(block)
     }
     
-    func dispatchSync(_ block: @escaping () -> Void) {
+    func dispatchSync(_ block: @escaping @Sendable () -> Void) {
         internalWrapper.dispatchSync(block)
     }
     
     @objc(dispatchAsyncOnMainQueueIfNotMainThread:)
-    public func dispatchAsyncOnMainQueueIfNotMainThread(block: @escaping () -> Void) {
+    public func dispatchAsyncOnMainQueueIfNotMainThread(block: @escaping @Sendable () -> Void) {
         internalWrapper.dispatchAsyncOnMainQueueIfNotMainThread(block: block)
     }
 
     @objc(dispatchSyncOnMainQueue:)
-    public func dispatchSyncOnMainQueue(block: @escaping () -> Void) {
+    public func dispatchSyncOnMainQueue(block: @escaping @Sendable () -> Void) {
         internalWrapper.dispatchSyncOnMainQueue(block: block)
     }
     
-    public func dispatchSyncOnMainQueue(_ block: @escaping () -> Void, timeout: Double) {
+    public func dispatchSyncOnMainQueue(_ block: @escaping @Sendable () -> Void, timeout: Double) {
         internalWrapper.dispatchSync(onMainQueue: block, timeout: timeout)
     }
 
-    public func dispatch(after interval: TimeInterval, block: @escaping () -> Void) {
+    public func dispatch(after interval: TimeInterval, block: @escaping @Sendable () -> Void) {
         internalWrapper.dispatch(after: interval, block: block)
     }
     
-    public func dispatchOnce(_ predicate: UnsafeMutablePointer<CLong>, block: @escaping () -> Void) {
+    public func dispatchOnce(_ predicate: UnsafeMutablePointer<CLong>, block: @escaping @Sendable () -> Void) {
         internalWrapper.dispatchOnce(predicate, block: block)
     }
 
@@ -94,4 +94,5 @@ protocol SentryDispatchQueueWrapperProtocol {
 }
 
 extension SentryDispatchQueueWrapper: SentryDispatchQueueWrapperProtocol {}
+extension SentryDispatchQueueWrapper: @unchecked Sendable {}
 // swiftlint:enable missing_docs

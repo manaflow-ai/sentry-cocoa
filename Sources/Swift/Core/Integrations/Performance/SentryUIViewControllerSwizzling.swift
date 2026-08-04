@@ -7,7 +7,7 @@ import UIKit
 
 /// Protocol that defines the properties required from UIApplication for swizzling.
 /// This allows testing with mock classes instead of relying on UIApplication directly.
-@objc protocol SentryUIApplication {
+@MainActor @objc protocol SentryUIApplication {
     var delegate: UIApplicationDelegate? { get set }
 }
 
@@ -24,7 +24,7 @@ private func defaultLoadedImageNamesProvider() -> [String] {
     }
 }
 
-class SentryUIViewControllerSwizzling {
+final class SentryUIViewControllerSwizzling: @unchecked Sendable {
     private let options: Options
     private let inAppLogic: SentryInAppLogic
     private let dispatchQueue: SentryDispatchQueueWrapper
@@ -56,6 +56,13 @@ class SentryUIViewControllerSwizzling {
     }
 
     func start() {
+        SentryMainActor.runSync {
+            self.startOnMainActor()
+        }
+    }
+
+    @MainActor
+    private func startOnMainActor() {
         let imageNames = loadedImageNamesProvider()
         for inAppInclude in inAppLogic.inAppIncludes {
             var found = false
@@ -96,6 +103,13 @@ class SentryUIViewControllerSwizzling {
     }
     
     func stop() {
+        SentryMainActor.runSync {
+            self.stopOnMainActor()
+        }
+    }
+
+    @MainActor
+    private func stopOnMainActor() {
         SentryUIViewControllerSwizzlingHelper.stop()
         // Remove observers
         NotificationCenter.default.removeObserver(
@@ -105,6 +119,7 @@ class SentryUIViewControllerSwizzling {
         )
     }
 
+    @MainActor
     private func findApp() -> SentryUIApplication? {
         guard UIApplication.responds(to: #selector(getter: UIApplication.shared)) else {
             SentrySDKLog.debug("UIApplication doesn't respond to sharedApplication.")
@@ -119,6 +134,7 @@ class SentryUIViewControllerSwizzling {
         return app
     }
 
+    @MainActor
     func swizzleUIViewControllersOfClassesInImageOf(_ targetClass: AnyClass?) {
         guard let targetClass else {
             SentrySDKLog.debug("Class is NULL. Skipping swizzling of classes in same image.")
@@ -140,6 +156,7 @@ class SentryUIViewControllerSwizzling {
         swizzleUIViewControllers(ofImage: imageName)
     }
 
+    @MainActor
     func swizzleUIViewControllers(ofImage imageName: String) {
         if imageName.contains("UIKitCore") {
             SentrySDKLog.debug("Skipping UIKitCore.")
@@ -173,7 +190,7 @@ class SentryUIViewControllerSwizzling {
     /// If the iOS version is 13 or newer, and the project does not use a custom Window initialization
     /// the app uses a UIScene to manage windows instead of the old AppDelegate.
     /// We wait for the first scene to connect to the app in order to find the rootViewController.
-    @objc func swizzleRootViewControllerFromSceneDelegateNotification(_ notification: Notification) {
+    @MainActor @objc func swizzleRootViewControllerFromSceneDelegateNotification(_ notification: Notification) {
         guard notification.name == UIScene.willConnectNotification else {
             return
         }
@@ -206,6 +223,7 @@ class SentryUIViewControllerSwizzling {
     }
 
     @discardableResult
+    @MainActor
     func swizzleRootViewControllerFromUIApplication(_ app: SentryUIApplication) -> Bool {
         guard let delegate = app.delegate else {
             SentrySDKLog.debug("App delegate is nil. Skipping swizzleRootViewControllerFromAppDelegate.")
@@ -233,6 +251,7 @@ class SentryUIViewControllerSwizzling {
         return true
     }
 
+    @MainActor
     func swizzleRootViewControllerAndDescendant(_ rootViewController: UIViewController) {
         let allViewControllers = viewControllerHierarchy(of: rootViewController)
 
@@ -254,6 +273,7 @@ class SentryUIViewControllerSwizzling {
         }
     }
 
+    @MainActor
     private func swizzleViewControllerSubClass(_ targetClass: AnyClass) {
         guard shouldSwizzleViewController(targetClass) else {
             SentrySDKLog.debug("Skipping swizzling of class: \(targetClass)")

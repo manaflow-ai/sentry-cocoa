@@ -1,10 +1,10 @@
 #if canImport(UIKit) && !SENTRY_NO_UI_FRAMEWORK
 #if os(iOS) || os(tvOS)
 import Foundation
-import UIKit
+public import UIKit
 
 /// nodoc
-public extension UIView {
+@MainActor public extension UIView {
     
     /**
      * Marks this view to be redacted during replays.

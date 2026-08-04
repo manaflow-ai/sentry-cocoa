@@ -99,7 +99,14 @@ extension SentrySDK {
     ///   https://github.com/getsentry/sentry-cocoa/issues/6342 for progress.
     ///
     /// - SeeAlso: For complete documentation, visit https://docs.sentry.io/platforms/apple/metrics/
-    public static var metrics: SentryMetricsApiProtocol = SentryMetricsApi(dependencies: SentryDependencyContainer.sharedInstance())
+    private static let metricsState = SentryMutex<SentryMetricsApiProtocol>(
+        SentryMetricsApi(dependencies: SentryDependencyContainer.sharedInstance())
+    )
+
+    public static var metrics: SentryMetricsApiProtocol {
+        get { metricsState.withLock { $0 } }
+        set { metricsState.withLock { $0 = newValue } }
+    }
 
     /// Inits and configures Sentry (`SentryHub`, `SentryClient`) and sets up all integrations. Make sure to
     /// set a valid DSN.
@@ -408,9 +415,8 @@ extension SentrySDK {
     /// - parameter feedback: The feedback to send to Sentry.
     /// - note: If you'd prefer not to build the UI required to gather the feedback from the user,
     /// configure the managed form with `SentryOptions.configureUserFeedback` and present it with
-    /// `SentrySDK.feedback.show()`, `SentrySDK.FeedbackForm`, or SwiftUI's
-    /// `sentryFeedback(isPresented:)`. See https://docs.sentry.io/platforms/apple/user-feedback/
-    /// for more information.
+    /// `SentrySDK.feedback.show()` or `SentrySDK.FeedbackForm`.
+    /// See https://docs.sentry.io/platforms/apple/user-feedback/ for more information.
     #if !SDK_V10
     @objc(captureFeedback:)
     #endif
@@ -434,7 +440,7 @@ extension SentrySDK {
     #if !SDK_V10
     @objc
     #endif
-    public static let feedback = {
+    @MainActor public static let feedback = {
       return SentryFeedbackAPI()
     }()
     #endif

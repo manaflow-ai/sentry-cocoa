@@ -3,10 +3,10 @@
 import Foundation
 #if os(iOS) && !SENTRY_NO_UI_FRAMEWORK
 internal import _SentryPrivate
-import UIKit
+public import UIKit
 
 @available(iOSApplicationExtension, unavailable)
-protocol SentryUserFeedbackFormDelegate: NSObjectProtocol {
+@MainActor protocol SentryUserFeedbackFormDelegate: NSObjectProtocol {
     func userFeedbackFormWillOpen(_ form: SentryUserFeedbackFormController)
     func userFeedbackFormDidClose(_ form: SentryUserFeedbackFormController)
 }
@@ -291,39 +291,6 @@ extension SentryUserFeedbackFormController: UITextViewDelegate {
         viewModel.updateSubmitButtonAccessibilityHint()
     }
 }
-
-#if DEBUG && swift(>=5.10)
-import SwiftUI
-
-struct ViewControllerWrapper: UIViewControllerRepresentable {
-    let viewController: UIViewController
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        return viewController
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) { }
-}
-
-@available(iOS 17.0, *)
-#Preview {
-    SentryUserFeedbackFormController()
-}
-
-@available(iOS 17.0, *)
-#Preview {
-    ViewControllerWrapper(
-        viewController: SentryUserFeedbackFormController())
-    .preferredColorScheme(.dark).colorScheme(.dark)
-}
-
-@available(iOS 17.0, *)
-#Preview {
-    ViewControllerWrapper(
-        viewController: SentryUserFeedbackFormController())
-    .dynamicTypeSize(.accessibility5)
-}
-#endif // DEBUG && swift(>=5.10)
 
 #endif // os(iOS) && !SENTRY_NO_UI_FRAMEWORK
 

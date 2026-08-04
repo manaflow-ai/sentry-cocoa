@@ -7,7 +7,7 @@ import AVFoundation
 import CoreGraphics
 import CoreMedia
 import Foundation
-import UIKit
+public import UIKit
 
 func removeReplayFile(at fileURL: URL) {
     guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
@@ -22,7 +22,10 @@ func removeReplayFile(at fileURL: URL) {
 
 // swiftlint:disable type_body_length
 @objcMembers
-@_spi(Private) public class SentryOnDemandReplay: NSObject, SentryReplayVideoMaker {
+@_spi(Private) public class SentryOnDemandReplay: NSObject, SentryReplayVideoMaker, @unchecked Sendable {
+
+    // Mutable frame state is confined to `processingQueue`. Video encoding
+    // state is handed to `assetWorkerQueue` through Sendable value snapshots.
 
     private let _outputPath: String
     private var _totalFrames = 0
@@ -180,7 +183,7 @@ func removeReplayFile(at fileURL: URL) {
         return DateInterval(start: oldest, end: newest)
     }
 
-    public func createVideoInBackgroundWith(beginning: Date, end: Date, completion: @escaping ([SentryVideoInfo]) -> Void) {
+    public func createVideoInBackgroundWith(beginning: Date, end: Date, completion: @escaping @Sendable ([SentryVideoInfo]) -> Void) {
         // Note: In Swift it is best practice to use `Result<Value, Error>` instead of `(Value?, Error?)`
         //       Due to interoperability with Objective-C and @objc, we can not use Result for the completion callback.
         SentrySDKLog.debug("[Session Replay] Creating video in background with beginning: \(beginning), end: \(end)")
@@ -224,26 +227,11 @@ func removeReplayFile(at fileURL: URL) {
                 .appendingPathExtension("mp4")
 
             let group = DispatchGroup()
-            var currentError: Error?
+            let renderOutcome = SentryMutex<Result<SentryRenderVideoResult, Error>?>(nil)
 
             group.enter()
             self.renderVideo(with: videoFrames, fromIndex: frameCount, until: end, at: outputFileURL) { result in
-                switch result {
-                case .success(let videoResult):
-                    // Set the frame count/offset to the new index that is returned by the completion block.
-                    // This is important to avoid processing the same frame multiple times.
-                    frameCount = videoResult.finalFrameIndex
-                    SentrySDKLog.debug("[Session Replay] Finished rendering video, frame count moved to: \(frameCount)")
-
-                    // Append the video info to the videos array.
-                    // In case no video info is returned, skip the segment.
-                    if let videoInfo = videoResult.info {
-                        videos.append(videoInfo)
-                    }
-                case .failure(let error):
-                    SentrySDKLog.error("[Session Replay] Failed to render video with error: \(error)")
-                    currentError = error
-                }
+                renderOutcome.withLock { $0 = result }
                 group.leave()
             }
 
@@ -256,8 +244,18 @@ func removeReplayFile(at fileURL: URL) {
                 return videos
             }
 
-            // If there was an error, log it and exit the loop.
-            if let error = currentError {
+            guard let outcome = renderOutcome.withLock({ $0 }) else {
+                SentrySDKLog.error("[Session Replay] Video rendering completed without an outcome")
+                return videos
+            }
+
+            switch outcome {
+            case .success(let videoResult):
+                frameCount = videoResult.finalFrameIndex
+                if let videoInfo = videoResult.info {
+                    videos.append(videoInfo)
+                }
+            case .failure(let error):
                 // Until v8.50.2 the error was propagated to the completion block, discarding any generated video.
                 // Instead this will "silently" fail by only logging the error and returning the successfully generated videos.
                 SentrySDKLog.error("[Session Replay] Error while rendering video: \(error), returning \(videos.count) videos")
@@ -287,7 +285,7 @@ func removeReplayFile(at fileURL: URL) {
         fromIndex: Int,
         until videoEnd: Date,
         at outputFileURL: URL,
-        completion: @escaping (Result<SentryRenderVideoResult, Error>) -> Void
+        completion: @escaping @Sendable (Result<SentryRenderVideoResult, Error>) -> Void
     ) {
         SentrySDKLog.debug("[Session Replay] Rendering video with \(videoFrames.count) frames, from index: \(fromIndex), to output url: \(outputFileURL)")
 
@@ -346,8 +344,9 @@ func removeReplayFile(at fileURL: URL) {
         //
         // By setting the queue to the asset worker queue, we ensure that the callback is invoked on the asset worker queue.
         // This is important to avoid a deadlock, as this method is called on the processing queue.
+        let writerInput = SentryUncheckedSendable(videoWriterInput)
         videoWriterInput.requestMediaDataWhenReady(on: assetWorkerQueue.queue) {
-            frameProcessor.processFrames(videoWriterInput: videoWriterInput, onCompletion: completion)
+            frameProcessor.processFrames(videoWriterInput: writerInput.value, onCompletion: completion)
         }
     }
 

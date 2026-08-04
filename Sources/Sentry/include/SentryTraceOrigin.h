@@ -29,7 +29,6 @@ SENTRY_EXTERN NSString *const SentryTraceOriginAutoNSData;
 SENTRY_EXTERN NSString *const SentryTraceOriginAutoUiEventTracker;
 SENTRY_EXTERN NSString *const SentryTraceOriginAutoUITimeToDisplay;
 SENTRY_EXTERN NSString *const SentryTraceOriginAutoUIViewController;
-SENTRY_EXTERN NSString *const SentryTraceOriginAutoUISwiftUI;
 
 SENTRY_EXTERN NSString *const SentryTraceOriginManual;
 SENTRY_EXTERN NSString *const SentryTraceOriginManualFileData;

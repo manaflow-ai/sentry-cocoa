@@ -3,13 +3,13 @@
 #if os(iOS) || os(tvOS)
 
 internal import _SentryPrivate
-import UIKit
+public import UIKit
 
 @objcMembers
-@_spi(Private) public class SentryScreenshotSource: NSObject {
+@_spi(Private) public class SentryScreenshotSource: NSObject, @unchecked Sendable {
     private let photographer: SentryViewPhotographer
 
-    public override convenience init() {
+    @MainActor public override convenience init() {
         // We need to provide a init method without parameters for Obj-C compatibility.
         // However, we want to force users to provide a photographer.
         // `assertionFailure` will not crash the app in release builds, but at least
@@ -30,37 +30,20 @@ import UIKit
     /// Get a screenshot of every open window in the app.
     /// - Returns: An array of UIImage instances.
     public func appScreenshotsFromMainThread() -> [UIImage] {
-        var result: [UIImage] = []
-
-        let takeScreenShot = { result = self.appScreenshots() }
-
-        SentryDependencyContainerSwiftHelper.dispatchSync(onMainQueue: takeScreenShot)
-
-        return result
+        SentryMainActor.runSyncUnchecked { self.appScreenshots() }
     }
 
     /// Get a screenshot of every open window in the app.
     /// - Returns: An array of Data instances containing PNG images.
     public func appScreenshotDatasFromMainThread() -> [Data] {
-        var result: [Data] = []
-
-        let takeScreenShot = { result = self.appScreenshotsData() }
-
-        SentryDependencyContainerSwiftHelper.dispatchSync(onMainQueue: takeScreenShot)
-
-        return result
+        SentryMainActor.runSync { self.appScreenshotsData() }
     }
 
     /// Save the current app screen shots in the given directory.
     /// If an app has more than one screen, one image for each screen will be saved.
     /// - Parameter imagesDirectoryPath: The path where the images should be saved.
     public func saveScreenShots(_ imagesDirectoryPath: String) {
-        // This function does not dispatch the screenshot to the main thread.
-        // The caller should be aware of that.
-        // We did it this way because we use this function to save screenshots
-        // during signal handling, and if we dispatch it to the main thread,
-        // that is probably blocked by the crash event, we freeze the application.
-        let screenshotData = appScreenshotsData()
+        let screenshotData = appScreenshotDatasFromMainThread()
 
         for (index, data) in screenshotData.enumerated() {
             let name = index == 0 ? "screenshot.png" : "screenshot-\(index + 1).png"
@@ -69,7 +52,7 @@ import UIKit
         }
     }
 
-    public func appScreenshots() -> [UIImage] {
+    @MainActor public func appScreenshots() -> [UIImage] {
         let windows = SentryDependencyContainerSwiftHelper.windows() ?? []
         var result: [UIImage] = []
         result.reserveCapacity(windows.count)
@@ -94,7 +77,7 @@ import UIKit
         return result
     }
 
-    public func appScreenshotsData() -> [Data] {
+    @MainActor public func appScreenshotsData() -> [Data] {
         let screenshots = appScreenshots()
         var result: [Data] = []
         result.reserveCapacity(screenshots.count)

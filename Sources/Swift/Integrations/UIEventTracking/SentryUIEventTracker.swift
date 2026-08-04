@@ -4,7 +4,7 @@ internal import _SentryPrivate
 import UIKit
 
 /// Tracks UIKit control actions and forwards normalized UI events to a tracker mode.
-final class SentryUIEventTracker {
+final class SentryUIEventTracker: @unchecked Sendable {
 
     // MARK: - Types
 
@@ -47,6 +47,7 @@ final class SentryUIEventTracker {
         swizzleWrapper.removeSwizzleSendAction(forKey: Self.sentryUIEventTrackerSwizzleSendAction)
     }
 
+    @MainActor
     private func sendActionCallback(action: String, target: Any?, sender: Any?, event: UIEvent?) {
         guard let target else {
             SentrySDKLog.debug("Target was nil for action \(action); won't capture in transaction (sender: \(String(describing: sender)); event: \(String(describing: event)))")
@@ -58,18 +59,8 @@ final class SentryUIEventTracker {
             return
         }
 
-        // When using an application delegate with SwiftUI we receive touch events here, but
-        // the target class name looks something like
-        // _TtC7SwiftUIP33_64A26C7A8406856A733B1A7B593971F711Coordinator.primaryActionTriggered,
-        // which is unacceptable for a transaction name. Ideally, we should somehow shorten
-        // the long name.
         let targetObject = target as AnyObject
         let targetClass = NSStringFromClass(type(of: targetObject))
-        if targetClass.contains("SwiftUI") {
-            SentrySDKLog.debug("Won't record transaction for SwiftUI target event.")
-            return
-        }
-
         let actionName = transactionName(action: action, target: targetClass)
         let operation = Self.operation(sender: sender)
 

@@ -43,8 +43,8 @@ final class SentryExtensionDetector: NSObject {
         } catch SentryInfoPlistError.keyNotFound {
             // NSExtension key not found - not an extension
             return nil
-        } catch SentryInfoPlistError.unableToCastValue(let key, let value, let type) {
-            SentrySDKLog.error("Failed to cast NSExtension value for key '\(key)': \(value) to type \(type)")
+        } catch SentryInfoPlistError.unableToCastValue(let key, let valueDescription, let typeDescription) {
+            SentrySDKLog.error("Failed to cast NSExtension value for key '\(key)': \(valueDescription) to type \(typeDescription)")
             return nil
         } catch {
             SentrySDKLog.error("Unexpected error reading extension info from Info.plist: \(error)")

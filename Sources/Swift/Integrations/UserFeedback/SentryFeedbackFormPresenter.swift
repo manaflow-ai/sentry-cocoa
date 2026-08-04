@@ -5,7 +5,7 @@ internal import _SentryPrivate
 import UIKit
 
 @available(iOSApplicationExtension, unavailable)
-enum SentryFeedbackFormPresenter {
+@MainActor enum SentryFeedbackFormPresenter {
     /// Finds a view controller suitable for automatic presentation by reusing the SDK's
     /// active-window and relevant-view-controller lookup.
     static func presentingViewController() -> UIViewController? {
