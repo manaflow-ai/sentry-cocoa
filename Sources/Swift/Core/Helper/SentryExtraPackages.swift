@@ -2,7 +2,8 @@
 import Foundation
 
 @objc @_spi(Private) public final class SentryExtraPackages: NSObject {
-    private static var extraPackages = Set<[String: String]>()
+    // Every access is serialized by `lock`.
+    nonisolated(unsafe) private static var extraPackages = Set<[String: String]>()
     private static let lock = NSRecursiveLock()
 
     @objc

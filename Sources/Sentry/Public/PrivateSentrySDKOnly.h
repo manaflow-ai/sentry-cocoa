@@ -169,7 +169,7 @@ typedef void (^SentryOnAppStartMeasurementAvailable)(
 
 /**
  * Return an instance of SentryRedactOptions with given option
- * To be used from SentrySwiftUI, which cannot access the private
+ * Exposes the internal performance tracker to source-built client integrations.
  * `SentryRedactOptions` class.
  */
 + (UIView *)sessionReplayMaskingOverlay:(id<SentryRedactOptions>)options;

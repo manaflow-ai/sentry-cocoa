@@ -13,7 +13,7 @@ public final class SentryRedactViewHelper: NSObject {
     private static var associatedRedactObjectHandle: UInt8 = 0
     private static var associatedIgnoreObjectHandle: UInt8 = 0
     private static var associatedClipOutObjectHandle: UInt8 = 0
-    private static var associatedSwiftUIRedactObjectHandle: UInt8 = 0
+    private static var associatedPriorityRedactObjectHandle: UInt8 = 0
     
     override private init() {}
     
@@ -41,12 +41,12 @@ public final class SentryRedactViewHelper: NSObject {
         objc_setAssociatedObject(view, &associatedClipOutObjectHandle, true, .OBJC_ASSOCIATION_ASSIGN)
     }
     
-    static func shouldRedactSwiftUI(_ view: UIView) -> Bool {
-        (objc_getAssociatedObject(view, &associatedSwiftUIRedactObjectHandle) as? NSNumber)?.boolValue ?? false
+    static func shouldPriorityRedact(_ view: UIView) -> Bool {
+        (objc_getAssociatedObject(view, &associatedPriorityRedactObjectHandle) as? NSNumber)?.boolValue ?? false
     }
     
-    static public func maskSwiftUI(_ view: UIView) {
-        objc_setAssociatedObject(view, &associatedSwiftUIRedactObjectHandle, true, .OBJC_ASSOCIATION_ASSIGN)
+    static public func priorityMaskView(_ view: UIView) {
+        objc_setAssociatedObject(view, &associatedPriorityRedactObjectHandle, true, .OBJC_ASSOCIATION_ASSIGN)
     }
 }
 

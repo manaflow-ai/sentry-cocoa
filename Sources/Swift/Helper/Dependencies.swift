@@ -1,26 +1,29 @@
 // swiftlint:disable missing_docs
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 
 @objc(SentryDependencies) @_spi(Private) public final class Dependencies: NSObject {
-    @objc public static let random: SentryRandomProtocol = SentryRandom()
-    @objc public static let threadWrapper = SentryThreadWrapper()
-    @objc public static let processInfoWrapper: SentryProcessInfoSource = ProcessInfo.processInfo
-    static let infoPlistWrapper: SentryInfoPlistWrapperProvider = SentryInfoPlistWrapper()
-    @objc public static let sessionReplayEnvironmentChecker: SentrySessionReplayEnvironmentChecker = {
+    // These process-lifetime wrappers provide their own synchronization. They
+    // are immutable compatibility seams for Objective-C callers.
+    @objc nonisolated(unsafe) public static let random: SentryRandomProtocol = SentryRandom()
+    @objc nonisolated(unsafe) public static let threadWrapper = SentryThreadWrapper()
+    @objc nonisolated(unsafe) public static let processInfoWrapper: SentryProcessInfoSource = ProcessInfo.processInfo
+    nonisolated(unsafe) static let infoPlistWrapper: SentryInfoPlistWrapperProvider = SentryInfoPlistWrapper()
+    @objc nonisolated(unsafe) public static let sessionReplayEnvironmentChecker: SentrySessionReplayEnvironmentChecker = {
         SentrySessionReplayEnvironmentChecker(infoPlistWrapper: Dependencies.infoPlistWrapper)
     }()
-    @objc public static let dispatchQueueWrapper = SentryDispatchQueueWrapper()
-    @objc public static let notificationCenterWrapper: SentryNSNotificationCenterWrapper = NotificationCenter.default
-    @objc public static let crashWrapper = SentryCrashWrapper(processInfoWrapper: Dependencies.processInfoWrapper)
-    @objc public static let binaryImageCache = SentryBinaryImageCache()
-    @objc public static let debugImageProvider = SentryDebugImageProvider()
-    @objc public static let sysctlWrapper = SentrySysctl()
-    @objc public static let dateProvider = SentryDefaultCurrentDateProvider()
-    public static let objcRuntimeWrapper = SentryDefaultObjCRuntimeWrapper()
+    @objc nonisolated(unsafe) public static let dispatchQueueWrapper = SentryDispatchQueueWrapper()
+    @objc nonisolated(unsafe) public static let notificationCenterWrapper: SentryNSNotificationCenterWrapper = NotificationCenter.default
+    @objc nonisolated(unsafe) public static let crashWrapper = SentryCrashWrapper(processInfoWrapper: Dependencies.processInfoWrapper)
+    @objc nonisolated(unsafe) public static let binaryImageCache = SentryBinaryImageCache()
+    @objc nonisolated(unsafe) public static let debugImageProvider = SentryDebugImageProvider()
+    @objc nonisolated(unsafe) public static let sysctlWrapper = SentrySysctl()
+    @objc nonisolated(unsafe) public static let dateProvider = SentryDefaultCurrentDateProvider()
+    nonisolated(unsafe) public static let objcRuntimeWrapper = SentryDefaultObjCRuntimeWrapper()
 #if !os(watchOS) && !os(macOS) && !SENTRY_NO_UIKIT
-    @objc public static let uiDeviceWrapper = SentryDefaultUIDeviceWrapper(queueWrapper: Dependencies.dispatchQueueWrapper)
+    @objc nonisolated(unsafe) public static let uiDeviceWrapper = SentryDefaultUIDeviceWrapper(queueWrapper: Dependencies.dispatchQueueWrapper)
 #endif // !os(watchOS) && !os(macOS) && !SENTRY_NO_UIKIT
-    @objc public static var threadInspector = SentryThreadInspector()
-    @objc public static var fileIOTracker = SentryFileIOTracker(threadInspector: threadInspector, processInfoWrapper: processInfoWrapper)
+    // Mutable only by the SDK's serialized test reset hooks.
+    @objc nonisolated(unsafe) public static var threadInspector = SentryThreadInspector()
+    @objc nonisolated(unsafe) public static var fileIOTracker = SentryFileIOTracker(threadInspector: threadInspector, processInfoWrapper: processInfoWrapper)
 }
 // swiftlint:enable missing_docs

@@ -122,45 +122,6 @@ extension SentryUserFeedbackFormController: UITextViewDelegate {
     }
 }
 
-#if DEBUG && swift(>=5.10)
-import SwiftUI
-
-struct ViewControllerWrapper: UIViewControllerRepresentable {
-    let viewController: UIViewController
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        return viewController
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) { }
-}
-
-@available(iOS 17.0, *)
-#Preview {
-    SentryUserFeedbackFormController(config: .init(), delegate: nil, screenshot: nil)
-}
-
-@available(iOS 17.0, *)
-#Preview {
-    ViewControllerWrapper(
-        viewController: SentryUserFeedbackFormController(
-            config: .init(),
-            delegate: nil,
-            screenshot: nil))
-    .preferredColorScheme(.dark).colorScheme(.dark)
-}
-
-@available(iOS 17.0, *)
-#Preview {
-    ViewControllerWrapper(
-        viewController: SentryUserFeedbackFormController(
-            config: .init(),
-            delegate: nil,
-            screenshot: nil))
-    .dynamicTypeSize(.accessibility5)
-}
-#endif // DEBUG && swift(>=5.10)
-
 #endif // os(iOS) && !SENTRY_NO_UIKIT
 
 // swiftlint:enable type_body_length

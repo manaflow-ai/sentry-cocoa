@@ -31,7 +31,7 @@ extension CGPoint {
 }
 
 struct SentryIconography {
-    static let logo = {
+    static var logo: CGMutablePath {
         let path = CGMutablePath()
 
         // M29,2.26
@@ -150,7 +150,7 @@ struct SentryIconography {
 
         // c.53.29,20.29,34.77,20.66,35.17
         var c1 = point.translated(x: 0.53, y: 0.29)
-        var c2 = point.translated(x: 20.29, y: 34.77)
+        let c2 = point.translated(x: 20.29, y: 34.77)
         endpoint = point.translated(x: 20.66, y: 35.17)
         path.addCurve(to: endpoint, control1: c1, control2: c2)
         point = endpoint
@@ -190,9 +190,9 @@ struct SentryIconography {
         path.closeSubpath()
 
         return path
-    }()
+    }
     
-    static let megaphone = {
+    static var megaphone: CGMutablePath {
         let path = CGMutablePath()
                 
         path.move(to: CGPoint(x: 1, y: 3))
@@ -211,5 +211,5 @@ struct SentryIconography {
         path.addRelativeArc(center: CGPoint(x: 12, y: 6), radius: 3, startAngle: -(.pi / 2), delta: .pi)
         
         return path
-    }()
+    }
 }

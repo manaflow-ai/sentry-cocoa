@@ -1,4 +1,4 @@
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 
 /// Protocol for integrations that support manual flushing of buffered data.
 ///

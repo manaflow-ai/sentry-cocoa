@@ -61,18 +61,7 @@ static NSString *const SentryUIEventTrackerSwizzleSendAction
         return;
     }
 
-    // When using an application delegate with SwiftUI we receive touch events here, but
-    // the target class name looks something like
-    // _TtC7SwiftUIP33_64A26C7A8406856A733B1A7B593971F711Coordinator.primaryActionTriggered,
-    // which is unacceptable for a transaction name. Ideally, we should somehow shorten
-    // the long name.
-
     NSString *targetClass = NSStringFromClass([SENTRY_UNWRAP_NULLABLE_VALUE(Class, target) class]);
-    if ([targetClass containsString:@"SwiftUI"]) {
-        SENTRY_LOG_DEBUG(@"Won't record transaction for SwiftUI target event.");
-        return;
-    }
-
     NSString *actionName = [self getTransactionName:action target:targetClass];
     NSString *operation = [self getOperation:SENTRY_UNWRAP_NULLABLE_VALUE(id, sender)];
 

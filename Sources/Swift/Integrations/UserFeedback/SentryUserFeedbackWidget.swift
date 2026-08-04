@@ -28,13 +28,8 @@ final class SentryUserFeedbackWidget {
         self.config = config
         self.delegate = delegate
 
-        /*
-         * We must have a UIScene in order to display an overlaying UIWindow in a SwiftUI app, which is currently how we display the widget. SentryUserFeedbackIntegrationDriver won't try to initialize this class if there are no connected UIScenes _and_ there is no UIApplicationDelegate at the time the integration is being installed.
-         *
-         * Both UIKit and SwiftUI apps can have connected UIScenes. Here's how we then try to tell the difference:
-         * - If there is no connected UIScene but there is already a UIApplicationDelegate by the time this integration is being installed, then we are either in a UIKit app, or inside a SwiftUI app that for whatever reason delays the call to SentrySDK.start until there is a connected scene. In either case, we'll just grab the first connected UIScene and proceed.
-         * - Otherwise, we're either in a SwiftUI app that _does_ call SentrySDK.start at the recommended time (SwiftUIApp.init), or there is a more complicated initialization procedure in a UIKit app that we can't automatically detect, and the app will need to call SentrySDK.feedback.showWidget() at the appropriate time, the same as how SwiftUI apps must currently do once they've connected a UIScene to their UIApplicationDelegateAdaptor.
-         */
+        // A connected scene is required to host the widget's overlay window. If launch has not
+        // produced one yet, the application can show the widget explicitly after scene connection.
         let window: Window
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             window = SentryUserFeedbackWidget.Window(config: config, windowScene: scene)

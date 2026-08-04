@@ -1,5 +1,5 @@
 // swiftlint:disable missing_docs
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 
 protocol SentryDispatchQueueWrapperProtocol {
     func dispatchSync(_ block: @escaping () -> Void)
@@ -10,6 +10,21 @@ protocol SentryDispatchQueueWrapperProtocol {
     func dispatchSyncOnMainQueue(_ block: @escaping () -> Void, timeout: Double)
     func dispatchOnce(_ predicate: UnsafeMutablePointer<CLong>, block: @escaping () -> Void)
     func dispatch(after interval: TimeInterval, workItem: DispatchWorkItem)
+}
+
+/// The Objective-C queue wrapper predates sendable block annotations. Its API has always
+/// transferred these callbacks to a private serial queue, so this box records that boundary
+/// without widening the unchecked contract to callers or captured values.
+private final class SentryDispatchClosureBox: @unchecked Sendable {
+    private let block: () -> Void
+
+    init(_ block: @escaping () -> Void) {
+        self.block = block
+    }
+
+    func call() {
+        block()
+    }
 }
 
 // This is the Swift version of `_SentryDispatchQueueWrapperInternal`
@@ -41,7 +56,10 @@ protocol SentryDispatchQueueWrapperProtocol {
 
     @objc(dispatchAsyncWithBlock:)
     public func dispatchAsync(_ block: @escaping () -> Void) {
-        internalWrapper.dispatchAsync(block)
+        let box = SentryDispatchClosureBox(block)
+        internalWrapper.dispatchAsync {
+            box.call()
+        }
     }
     
     func dispatchSync(_ block: @escaping () -> Void) {

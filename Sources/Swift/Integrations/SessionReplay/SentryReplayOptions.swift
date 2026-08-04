@@ -17,7 +17,7 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
         public static let enableFastViewRendering: Bool = false
         public static let quality: SentryReplayQuality = .medium
 
-        // The following properties are public because they are used by SentrySwiftUI.
+        // These properties remain public for source-compatible replay integrations.
 
         public static let maskedViewClasses: [AnyClass] = []
         public static let unmaskedViewClasses: [AnyClass] = []
@@ -27,7 +27,7 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
 
         // The following properties are defaults which are not configurable by the user.
 
-        fileprivate static let sdkInfo: [String: Any]? = nil
+        nonisolated(unsafe) fileprivate static let sdkInfo: [String: Any]? = nil
         fileprivate static let frameRate: UInt = 1
         fileprivate static let errorReplayDuration: TimeInterval = 30
         fileprivate static let sessionSegmentDuration: TimeInterval = 5
@@ -38,7 +38,7 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
      * Enum to define the quality of the session replay.
      */
     @objc
-    public enum SentryReplayQuality: Int, CustomStringConvertible {
+    public enum SentryReplayQuality: Int, CustomStringConvertible, Sendable {
         /**
          * Video Scale: 80%
          * Bit Rate: 20.000
@@ -180,7 +180,7 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
      *         to add and remove view types, so you do not accidentally remove our defaults.
      * - Note: The final set of excluded view types is computed by `SentryUIRedactBuilder` using the formula:
      *         **Default View Classes + Excluded View Classes - Included View Classes**
-     *         Default view classes are defined in `SentryUIRedactBuilder` (e.g., `CameraUI.ChromeSwiftUIView` on iOS 26+).
+     *         Default view classes are defined in `SentryUIRedactBuilder`.
      */
     public var excludedViewClasses: Set<String>
     
@@ -198,9 +198,8 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
      *         to add and remove view types, so you do not accidentally remove our defaults.
      * - Note: The final set of excluded view types is computed by `SentryUIRedactBuilder` using the formula:
      *         **Default View Classes + Excluded View Classes - Included View Classes**
-     *         Default view classes are defined in `SentryUIRedactBuilder` (e.g., `CameraUI.ChromeSwiftUIView` on iOS 26+).
-     *         For example, you can use this to re-enable traversal for `CameraUI.ChromeSwiftUIView` on iOS 26+
-     *         by calling ``includeViewTypeInSubtreeTraversal("CameraUI.ChromeSwiftUIView")``.
+     *         Default view classes are defined in `SentryUIRedactBuilder`.
+     *         Use this to re-enable traversal for an explicitly excluded view type.
      * - Note: Included patterns use exact matching (not partial) to prevent accidental matches. For example,
      *         if "ChromeCameraUI" is excluded and "Camera" is included, "ChromeCameraUI" will still be excluded
      *         because "Camera" doesn't exactly match "ChromeCameraUI".
@@ -232,7 +231,7 @@ public class SentryReplayOptions: NSObject, SentryRedactOptions {
      *
      * - Note: This method adds the view type to `includedViewClasses`, which filters the combined set
      *         of default excluded types (defined in `SentryUIRedactBuilder`) and `excludedViewClasses`.
-     *         For example, you can use this to re-enable traversal for `CameraUI.ChromeSwiftUIView` on iOS 26+.
+     *         Use this to re-enable traversal for an explicitly excluded view type.
      * - Note: Included patterns use exact matching (not partial) to prevent accidental matches.
      */
     public func includeViewTypeInSubtreeTraversal(_ viewType: String) {

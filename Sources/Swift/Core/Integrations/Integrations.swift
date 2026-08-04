@@ -1,5 +1,5 @@
 // swiftlint:disable missing_docs
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 
 // The Swift counterpart to `SentryObjcIntegrationProtocol`. This protocol allows
 // injecting the dependencies in a way that does not require the Integration to

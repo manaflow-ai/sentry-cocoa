@@ -588,7 +588,6 @@ Use clear, concise descriptions that avoid redundancy with the workflow name:
 - ✅ `Test ${{matrix.name}} V3 # Up the version with every change to keep track of flaky tests`
 - ✅ `Unit ${{matrix.name}}` (for unit test matrices)
 - ✅ `Run Benchmarks ${{matrix.suite}}` (for benchmarking matrices)
-- ✅ `Test SwiftUI V4 # Up the version with every change to keep track of flaky tests`
 - ✅ `Test Sentry Duplication V4 # Up the version with every change to keep track of flaky tests`
 
 **Note:**

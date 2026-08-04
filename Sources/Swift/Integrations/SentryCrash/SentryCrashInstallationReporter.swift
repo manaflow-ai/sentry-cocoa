@@ -1,4 +1,4 @@
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 import Foundation
 
 /**
@@ -8,6 +8,20 @@ import Foundation
  * processing through a SentryCrashReportSink.
  */
 final class SentryCrashInstallationReporter: SentryCrashInstallation {
+
+    /// Objective-C block types do not carry Swift sendability annotations. This box makes the
+    /// imported completion's immutable, copy-on-create lifetime explicit at the interop boundary.
+    private final class CompletionBox: @unchecked Sendable {
+        private let completion: SentryCrashReportFilterCompletion?
+
+        init(_ completion: SentryCrashReportFilterCompletion?) {
+            self.completion = completion
+        }
+
+        func call(_ reports: [Any]?, completed: Bool, error: Error?) {
+            completion?(reports, completed, error)
+        }
+    }
 
     private let inAppLogic: SentryInAppLogic
     private let crashWrapper: SentryCrashWrapper
@@ -33,13 +47,14 @@ final class SentryCrashInstallationReporter: SentryCrashInstallation {
     }
 
     override func sendAllReports(completion onCompletion: SentryCrashReportFilterCompletion?) {
+        let completionBox = CompletionBox(onCompletion)
         super.sendAllReports { filteredReports, completed, error in
             if let error = error {
                 SentrySDKLog.error("Error sending crash reports: \(error.localizedDescription)")
             }
             SentrySDKLog.debug("Sent \(String(describing: filteredReports?.count)) crash report(s)")
-            if completed, let onCompletion = onCompletion {
-                onCompletion(filteredReports, completed, error)
+            if completed {
+                completionBox.call(filteredReports, completed: completed, error: error)
             }
         }
     }

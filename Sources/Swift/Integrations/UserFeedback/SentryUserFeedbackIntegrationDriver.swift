@@ -1,7 +1,7 @@
 // swiftlint:disable missing_docs
 import Foundation
 #if os(iOS) && !SENTRY_NO_UIKIT
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 import UIKit
 
 /**
@@ -38,11 +38,8 @@ final class SentryUserFeedbackIntegrationDriver: NSObject {
             widgetConfigBuilder(configuration.widgetConfig)
             validate(configuration.widgetConfig)
 
-            /*
-             * We cannot currently automatically inject a widget into a SwiftUI application, because at the recommended time to start the Sentry SDK (SwiftUIApp.init) there is nowhere to put a UIWindow overlay. SwiftUI apps must currently declare a UIApplicationDelegateAdaptor that returns a UISceneConfiguration, which we can then extract a connected UIScene from into which we can inject a UIWindow.
-             *
-             * At the time this integration is being installed, if there is no UIApplicationDelegate and no connected UIScene, it is very likely we are in a SwiftUI app, but it's possible we could instead be in a UIKit app that has some nonstandard launch procedure or doesn't call SentrySDK.start in a place we expect/recommend, in which case they will need to manually display the widget when they're ready by calling SentrySDK.feedback.showWidget.
-             */
+            // Automatic widget injection needs either an application delegate or a connected scene.
+            // Apps with a nonstandard launch sequence can display the widget manually once ready.
             if UIApplication.shared.connectedScenes.isEmpty && UIApplication.shared.delegate == nil {
                 return
             }

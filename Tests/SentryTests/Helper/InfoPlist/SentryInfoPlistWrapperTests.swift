@@ -68,12 +68,12 @@ class SentryInfoPlistWrapperTests: XCTestCase {
         
         // Act & Assert
         XCTAssertThrowsError(try sut.getAppValueString(for: key)) { error in
-            guard case SentryInfoPlistError.unableToCastValue(let errorKey, _, let type) = error else {
+            guard case SentryInfoPlistError.unableToCastValue(let errorKey, _, let typeDescription) = error else {
                 XCTFail("Expected SentryInfoPlistError.unableToCastValue, got \(error)")
                 return
             }
             XCTAssertEqual(errorKey, key)
-            XCTAssertTrue(type == String.self)
+            XCTAssertEqual(typeDescription, String(describing: String.self))
         }
     }
     

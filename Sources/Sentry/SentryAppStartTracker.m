@@ -85,7 +85,7 @@ static const NSTimeInterval SENTRY_APP_START_MAX_DURATION = 180.0;
     // It can happen that the OS posts the didFinishLaunching notification before we register for it
     // or we just don't receive it. In this case the didFinishLaunchingTimestamp would be nil. As
     // the SDK should be initialized in application:didFinishLaunchingWithOptions: or in the init of
-    // @main of a SwiftUI  we set the timestamp here.
+    // For applications without an Objective-C entry point, set the timestamp here.
     self.didFinishLaunchingTimestamp = [SentryDependencyContainer.sharedInstance.dateProvider date];
 
     [NSNotificationCenter.defaultCenter addObserver:self

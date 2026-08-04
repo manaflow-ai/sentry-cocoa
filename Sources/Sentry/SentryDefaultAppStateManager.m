@@ -123,7 +123,7 @@
 /**
  * It is called when an app is receiving events / it is in the foreground and when we receive a
  * @c SentryHybridSdkDidBecomeActiveNotification.
- * @discussion This also works when using SwiftUI or Scenes, as UIKit posts a
+ * @discussion This also works when using UIKit scenes, as UIKit posts a
  * @c didBecomeActiveNotification regardless of whether your app uses scenes, see
  * https://developer.apple.com/documentation/uikit/uiapplicationdelegate/1622956-applicationdidbecomeactive.
  */

@@ -44,7 +44,7 @@ public protocol SentryRedactOptions {
      *
      * - Note: The final set of excluded view types is computed by `SentryUIRedactBuilder` using the formula:
      *         **Default View Classes + Excluded View Classes - Included View Classes**
-     *         Default view classes are defined in `SentryUIRedactBuilder` (e.g., `CameraUI.ChromeSwiftUIView` on iOS 26+).
+     *         Default view classes are defined in `SentryUIRedactBuilder`.
      */
     public var excludedViewClasses: Set<String> = []
     
@@ -60,8 +60,8 @@ public protocol SentryRedactOptions {
      *
      * - Note: The final set of excluded view types is computed by `SentryUIRedactBuilder` using the formula:
      *         **Default View Classes + Excluded View Classes - Included View Classes**
-     *         Default view classes are defined in `SentryUIRedactBuilder` (e.g., `CameraUI.ChromeSwiftUIView` on iOS 26+).
-     *         For example, you can use this to re-enable traversal for `CameraUI.ChromeSwiftUIView` on iOS 26+.
+     *         Default view classes are defined in `SentryUIRedactBuilder`.
+     *         Use this to re-enable traversal for an explicitly excluded view type.
      * - Note: Included patterns use exact matching (not partial) to prevent accidental matches. For example,
      *         if "ChromeCameraUI" is excluded and "Camera" is included, "ChromeCameraUI" will still be excluded
      *         because "Camera" doesn't exactly match "ChromeCameraUI".

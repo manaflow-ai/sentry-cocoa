@@ -1,34 +1,41 @@
 // swiftlint:disable missing_docs
 import Foundation
 
-typealias SentryLogOutput = ((String) -> Void)
+typealias SentryLogOutput = @Sendable (String) -> Void
 
-/// A note on the thread safety:
-/// The methods configure and log don't use synchronization mechanisms, meaning they aren't strictly speaking thread-safe.
-/// Still, you can use log from multiple threads. The problem is that when you call configure while
-/// calling log from multiple threads, you experience a race condition. It can take a bit until all
-/// threads know the new config. As the SDK should only call configure once when starting, we do accept
-/// this race condition. Adding locks for evaluating the log level for every log invocation isn't
-/// acceptable, as this adds a significant overhead for every log call. Therefore, we exclude SentryLog
-/// from the ThreadSanitizer as it produces false positives. The tests call configure multiple times,
-/// and the thread sanitizer would surface these race conditions. We accept these race conditions for
-/// the log messages in the tests over adding locking for all log messages.
+/// Logging configuration is captured under one lock before formatting and
+/// invoking the output callback. The callback runs after the lock is released.
 @objc
 @_spi(Private) public final class SentrySDKLog: NSObject {
-    
-    static private(set) var isDebug = true
-    static private(set) var diagnosticLevel = SentryLevel.error
+
+    private struct State {
+        var isDebug = true
+        var diagnosticLevel = SentryLevel.error
+        var logOutput: SentryLogOutput = { print($0) }
+        var dateProvider: SentryCurrentDateProvider = SentryDefaultCurrentDateProvider()
+    }
+
+    private static let stateLock = NSRecursiveLock()
+    // Every access is serialized by `stateLock`.
+    nonisolated(unsafe) private static var state = State()
+
+    static var isDebug: Bool {
+        stateLock.synchronized { state.isDebug }
+    }
+
+    static var diagnosticLevel: SentryLevel {
+        stateLock.synchronized { state.diagnosticLevel }
+    }
 
     /**
      * Threshold log level to always log, regardless of the current configuration
      */
     static let alwaysLevel = SentryLevel.fatal
-    private static var logOutput: ((String) -> Void) = { print($0) }
-    private static var dateProvider: SentryCurrentDateProvider = SentryDefaultCurrentDateProvider()
-
     static func _configure(_ isDebug: Bool, diagnosticLevel: SentryLevel) {
-        self.isDebug = isDebug
-        self.diagnosticLevel = diagnosticLevel
+        stateLock.synchronized {
+            state.isDebug = isDebug
+            state.diagnosticLevel = diagnosticLevel
+        }
     }
     
     @objc
@@ -39,8 +46,10 @@ typealias SentryLogOutput = ((String) -> Void)
         // expensive and we only care about the time difference between the
         // log messages. We don't use system uptime because of privacy concerns
         // see: NSPrivacyAccessedAPICategorySystemBootTime.
-        let time = self.dateProvider.date().timeIntervalSince1970
-        logOutput("[Sentry] [\(level)] [\(time)] \(message)")
+        let (time, output) = stateLock.synchronized {
+            (state.dateProvider.date().timeIntervalSince1970, state.logOutput)
+        }
+        output("[Sentry] [\(level)] [\(time)] \(message)")
     }
 
     /**
@@ -55,21 +64,23 @@ typealias SentryLogOutput = ((String) -> Void)
         if level.rawValue >= alwaysLevel.rawValue {
             return true
         }
-        return isDebug && level.rawValue >= diagnosticLevel.rawValue
+        return stateLock.synchronized {
+            state.isDebug && level.rawValue >= state.diagnosticLevel.rawValue
+        }
     }
  
     #if SENTRY_TEST || SENTRY_TEST_CI
     
     static func setOutput(_ output: @escaping SentryLogOutput) {
-        logOutput = output
+        stateLock.synchronized { state.logOutput = output }
     }
     
     static func getOutput() -> SentryLogOutput {
-        return logOutput
+        stateLock.synchronized { state.logOutput }
     }
     
     static func setDateProvider(_ dateProvider: SentryCurrentDateProvider) {
-        self.dateProvider = dateProvider
+        stateLock.synchronized { state.dateProvider = dateProvider }
     }
     
     #endif

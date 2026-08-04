@@ -208,8 +208,8 @@ final class SentryExtensionDetectorTests: XCTestCase {
             forKey: SentryInfoPlistKey.extension.rawValue,
             error: SentryInfoPlistError.unableToCastValue(
                 key: SentryInfoPlistKey.extension.rawValue,
-                value: "not a dictionary",
-                type: [String: Any].self
+                valueDescription: "not a dictionary",
+                typeDescription: String(describing: [String: Any].self)
             )
         )
         

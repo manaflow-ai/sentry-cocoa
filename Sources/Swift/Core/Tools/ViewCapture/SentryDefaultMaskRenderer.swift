@@ -36,9 +36,9 @@ class SentryDefaultMaskRenderer: NSObject, SentryMaskRenderer {
             defer { latestRegion = region }
 
             switch region.type {
-            case .redact, .redactSwiftUI:
+            case .redact, .priorityRedact:
                 // This early return is to avoid masking the same exact area in row,
-                // something that is very common in SwiftUI and can impact performance.
+                // which can happen in layered view hierarchies and impact performance.
                 guard latestRegion?.canReplace(as: region) != true && imageRect.intersects(path.boundingBoxOfPath) else { continue }
                 (region.color ?? UIImageHelper.averageColor(of: context.currentImage, at: rect.applying(region.transform))).setFill()
                 context.cgContext.addPath(path)

@@ -112,7 +112,7 @@ public final class SentryViewScreenshotOptions: NSObject, SentryRedactOptions {
      *         to add and remove view types, so you do not accidentally remove our defaults.
      * - Note: The final set of excluded view types is computed by `SentryUIRedactBuilder` using the formula:
      *         **Default View Classes + Excluded View Classes - Included View Classes**
-     *         Default view classes are defined in `SentryUIRedactBuilder` (e.g., `CameraUI.ChromeSwiftUIView` on iOS 26+).
+     *         Default view classes are defined in `SentryUIRedactBuilder`.
      */
     public private(set) var excludedViewClasses: Set<String>
 
@@ -130,9 +130,8 @@ public final class SentryViewScreenshotOptions: NSObject, SentryRedactOptions {
      *         to add and remove view types, so you do not accidentally remove our defaults.
      * - Note: The final set of excluded view types is computed by `SentryUIRedactBuilder` using the formula:
      *         **Default View Classes + Excluded View Classes - Included View Classes**
-     *         Default view classes are defined in `SentryUIRedactBuilder` (e.g., `CameraUI.ChromeSwiftUIView` on iOS 26+).
-     *         For example, you can use this to re-enable traversal for `CameraUI.ChromeSwiftUIView` on iOS 26+
-     *         by calling ``includeViewTypeInSubtreeTraversal("CameraUI.ChromeSwiftUIView")``.
+     *         Default view classes are defined in `SentryUIRedactBuilder`.
+     *         Use this to re-enable traversal for an explicitly excluded view type.
      * - Note: Included patterns use exact matching (not partial) to prevent accidental matches. For example,
      *         if "ChromeCameraUI" is excluded and "Camera" is included, "ChromeCameraUI" will still be excluded
      *         because "Camera" doesn't exactly match "ChromeCameraUI".
@@ -164,7 +163,7 @@ public final class SentryViewScreenshotOptions: NSObject, SentryRedactOptions {
      *
      * - Note: This method adds the view type to `includedViewClasses`, which filters the combined set
      *         of default excluded types (defined in `SentryUIRedactBuilder`) and `excludedViewClasses`.
-     *         For example, you can use this to re-enable traversal for `CameraUI.ChromeSwiftUIView` on iOS 26+.
+     *         Use this to re-enable traversal for an explicitly excluded view type.
      * - Note: Included patterns use exact matching (not partial) to prevent accidental matches.
      */
     public func includeViewTypeInSubtreeTraversal(_ viewType: String) {

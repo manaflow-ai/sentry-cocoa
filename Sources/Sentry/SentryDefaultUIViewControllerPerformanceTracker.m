@@ -20,16 +20,16 @@
 @interface SentryTimeToDisplayTracker () <SentryInitialDisplayReporting>
 @end
 
-@interface SentrySwiftUISpanHelper () <SentryInitialDisplayReporting>
+@interface SentryScreenSpanHelper () <SentryInitialDisplayReporting>
 @end
 
-@interface SentryObjCSwiftUISpanHelper ()
+@interface SentryObjCScreenSpanHelper ()
 
 @property (nonatomic, strong) id<SentryInitialDisplayReporting> initialDisplayReporting;
 
 @end
 
-@implementation SentryObjCSwiftUISpanHelper
+@implementation SentryObjCScreenSpanHelper
 
 - (instancetype)initWithHasSpan:(BOOL)hasSpan
         initialDisplayReporting:(id<SentryInitialDisplayReporting>)initialDisplayReporting
@@ -241,9 +241,8 @@
         return;
     }
     if (!tracker.waitForFullDisplay) {
-        SENTRY_LOG_WARN(@"Transaction is not waiting for full display report. You can enable "
-                        @"`enableTimeToFullDisplay` option, or use the waitForFullDisplay "
-                        @"property in our `SentryTracedView` view for SwiftUI.");
+        SENTRY_LOG_WARN(@"Transaction is not waiting for full display report. Enable the "
+                        @"`enableTimeToFullDisplay` option before reporting full display.");
         return;
     }
 
@@ -277,7 +276,7 @@
     return ttdTracker;
 }
 
-- (SentryObjCSwiftUISpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
+- (SentryObjCScreenSpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
                                                  waitForFullDisplay:(BOOL)waitforFullDisplay
                                                       transactionId:(SentrySpanId *)transactionId;
 {
@@ -287,23 +286,23 @@
             [self startTimeToDisplayTrackerForScreen:screenName
                                   waitForFullDisplay:waitforFullDisplay
                                               tracer:(SentryTracer *)span];
-        return [[SentryObjCSwiftUISpanHelper alloc] initWithHasSpan:YES
+        return [[SentryObjCScreenSpanHelper alloc] initWithHasSpan:YES
                                             initialDisplayReporting:displayReporting];
     }
-    return [[SentryObjCSwiftUISpanHelper alloc] initWithHasSpan:NO initialDisplayReporting:nil];
+    return [[SentryObjCScreenSpanHelper alloc] initWithHasSpan:NO initialDisplayReporting:nil];
 }
 
-+ (SentryObjCSwiftUISpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
++ (SentryObjCScreenSpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
                                                  waitForFullDisplay:(BOOL)waitforFullDisplay
                                                       transactionId:(SentrySpanId *)transactionId
 {
     SentryUIViewControllerPerformanceTracker *vcTracker
         = SentryDependencyContainer.sharedInstance.uiViewControllerPerformanceTracker;
-    SentrySwiftUISpanHelper *result =
+    SentryScreenSpanHelper *result =
         [vcTracker startTimeToDisplayTrackerForScreen:screenName
                                    waitForFullDisplay:waitforFullDisplay
                                         transactionId:transactionId];
-    return [[SentryObjCSwiftUISpanHelper alloc] initWithHasSpan:result.hasSpan
+    return [[SentryObjCScreenSpanHelper alloc] initWithHasSpan:result.hasSpan
                                         initialDisplayReporting:result];
 }
 

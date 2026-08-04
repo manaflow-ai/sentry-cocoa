@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 import Foundation
 
 /// The main entry point for the Sentry SDK.
@@ -85,7 +85,7 @@ import Foundation
     ///   https://github.com/getsentry/sentry-cocoa/issues to show demand for this feature.
     ///
     /// - SeeAlso: For complete documentation, visit https://docs.sentry.io/platforms/apple/metrics/
-    public static var metrics: SentryMetricsApiProtocol = SentryMetricsApi(dependencies: SentryDependencyContainer.sharedInstance())
+    nonisolated(unsafe) public static let metrics: SentryMetricsApiProtocol = SentryMetricsApi(dependencies: SentryDependencyContainer.sharedInstance())
 
     /// Inits and configures Sentry (`SentryHub`, `SentryClient`) and sets up all integrations. Make sure to
     /// set a valid DSN.
@@ -460,7 +460,8 @@ import Foundation
     // MARK: Internal
 
     /// The option used to start the SDK
-    private static var _startOption: Options?
+    // Every access is serialized by `startOptionLock`.
+    nonisolated(unsafe) private static var _startOption: Options?
     private static let startOptionLock = NSRecursiveLock()
     // swiftlint:disable:next missing_docs
     @_spi(Private) @objc public static var startOption: Options? {

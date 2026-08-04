@@ -4,6 +4,11 @@
     </a>
 </div>
 
+> [!IMPORTANT]
+> This Manaflow fork is a source-only Swift package for cmux. It exposes the `Sentry` product on
+> macOS 14 and iOS 18 or newer, builds in Swift 6 language mode, and omits upstream binary,
+> CocoaPods, sample-app, and optional UI-framework distribution surfaces.
+
 _Bad software is everywhere, and we're tired of it. Sentry is on a mission to help developers write better software faster, so we can get back to enjoying technology. If you want to join us [<kbd>**Check out our open positions**</kbd>](https://sentry.io/careers/)_
 
 > [!NOTE]
@@ -24,7 +29,7 @@ _Bad software is everywhere, and we're tired of it. Sentry is on a mission to he
 
 # Installation
 
-SPM is the recommended way to include Sentry into your project, but we also support [CocoaPods](https://cocoapods.org/pods/Sentry), and provide pre-built XCFrameworks on [our GitHub Releases page](https://github.com/getsentry/sentry-cocoa/releases).
+Use Swift Package Manager and depend on the `Sentry` product from this repository.
 
 # Initialization
 

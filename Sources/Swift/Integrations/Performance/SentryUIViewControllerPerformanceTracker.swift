@@ -1,14 +1,14 @@
 // swiftlint:disable missing_docs
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UIKIT
 
-@_implementationOnly import _SentryPrivate
+internal import _SentryPrivate
 import UIKit
 
 @_spi(Private) @objc public protocol SentryInitialDisplayReporting {
     func reportInitialDisplay()
 }
 
-@_spi(Private) @objc public final class SentrySwiftUISpanHelper: NSObject {
+@_spi(Private) @objc public final class SentryScreenSpanHelper: NSObject {
     @objc public let hasSpan: Bool
     
     @objc public func reportInitialDisplay() {
@@ -78,9 +78,9 @@ import UIKit
     @objc public func startTimeToDisplayTracker(
         forScreen screenName: String,
         waitForFullDisplay: Bool,
-        transactionId: SpanId) -> SentrySwiftUISpanHelper {
+        transactionId: SpanId) -> SentryScreenSpanHelper {
             let objcType = helper.startTimeToDisplay(forScreen: screenName, waitForFullDisplay: waitForFullDisplay, transactionId: transactionId)
-            return SentrySwiftUISpanHelper(hasSpan: objcType.hasSpan) {
+            return SentryScreenSpanHelper(hasSpan: objcType.hasSpan) {
                 objcType.reportInitialDisplay()
             }
         }

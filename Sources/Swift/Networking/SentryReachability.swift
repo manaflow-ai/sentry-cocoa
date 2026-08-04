@@ -27,7 +27,7 @@ public protocol SentryReachabilityObserver: NSObjectProtocol {
 
 // MARK: - SentryReachability
 @_spi(Private) @objc
-public class SentryReachability: NSObject {
+public final class SentryReachability: NSObject, @unchecked Sendable {
     private var reachabilityObservers = NSHashTable<SentryReachabilityObserver>.weakObjects()
     private var currentConnectivity: SentryConnectivity = .none
     private var pathMonitor: NWPathMonitor?
@@ -73,7 +73,9 @@ public class SentryReachability: NSObject {
         
         self.currentConnectivity = .none
         self.pathMonitor = NWPathMonitor()
-        self.pathMonitor?.pathUpdateHandler = self.pathUpdateHandler
+        self.pathMonitor?.pathUpdateHandler = { [weak self] path in
+            self?.pathUpdateHandler(path)
+        }
         self.pathMonitor?.start(queue: self.reachabilityQueue)
     }
     
@@ -159,7 +161,9 @@ public class SentryReachability: NSObject {
         // By copying the observers list and releasing observersLock before notifying, we ensure this method
         // never holds observersLock while calling observer code that might acquire other locks.
         let (observersToNotify, previousConnectivity) = observersLock.synchronized {
-            (reachabilityObservers.allObjects, currentConnectivity)
+            let previousConnectivity = currentConnectivity
+            currentConnectivity = connectivity
+            return (reachabilityObservers.allObjects, previousConnectivity)
         }
         
         SentrySDKLog.debug("Entered synchronized region of SentryConnectivityCallback with connectivity: \(connectivity.toString())")
@@ -169,8 +173,7 @@ public class SentryReachability: NSObject {
             return
         }
         
-        currentConnectivity = connectivity
-        guard connectivityShouldReportChange(previousConnectivity, currentConnectivity) else {
+        guard connectivityShouldReportChange(previousConnectivity, connectivity) else {
             return
         }
         
