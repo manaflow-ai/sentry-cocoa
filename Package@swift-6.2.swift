@@ -73,6 +73,11 @@ let package = Package(
                 .linkedLibrary("c++"),
             ]
         ),
+        .testTarget(
+            name: "SentrySourceForkTests",
+            dependencies: ["Sentry", "SentrySwift"],
+            path: "Tests/SourceForkTests"
+        ),
     ],
     swiftLanguageModes: [.v6],
     cxxLanguageStandard: .cxx14
