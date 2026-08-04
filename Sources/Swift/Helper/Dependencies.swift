@@ -9,14 +9,20 @@ internal import _SentryPrivate
         let infoPlistWrapper: SentryInfoPlistWrapperProvider = SentryInfoPlistWrapper()
         let dispatchQueueWrapper = SentryDispatchQueueWrapper()
         let notificationCenterWrapper: SentryNSNotificationCenterWrapper = NotificationCenter.default
-        let binaryImageCache = SentryBinaryImageCache()
-        let debugImageProvider = SentryDebugImageProvider()
+        let binaryImageCache: SentryBinaryImageCache
+        let debugImageProvider: SentryDebugImageProvider
         let sysctlWrapper = SentrySysctl()
         let dateProvider = SentryDefaultCurrentDateProvider()
         let objcRuntimeWrapper = SentryDefaultObjCRuntimeWrapper()
 #if !os(watchOS) && !os(macOS) && !SENTRY_NO_UI_FRAMEWORK
         lazy var uiDeviceWrapper = SentryDefaultUIDeviceWrapper(queueWrapper: dispatchQueueWrapper)
 #endif // !os(watchOS) && !os(macOS) && !SENTRY_NO_UI_FRAMEWORK
+
+        init() {
+            let binaryImageCache = SentryBinaryImageCache()
+            self.binaryImageCache = binaryImageCache
+            self.debugImageProvider = SentryDebugImageProvider(binaryImageCache: binaryImageCache)
+        }
     }
 
     private static let state = SentryMutex(State())
