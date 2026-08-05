@@ -2,9 +2,9 @@
 internal import _SentryPrivate
 
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 
-@_spi(Private) public typealias SentrySwizzleSendActionCallback = (String, Any?, Any?, UIEvent?) -> Void
+@_spi(Private) public typealias SentrySwizzleSendActionCallback = @MainActor @Sendable (String, Any?, Any?, UIEvent?) -> Void
 
 #if DEBUG
 protocol SentrySwizzleWrapperProtocol {
@@ -18,13 +18,16 @@ typealias SentrySwizzleWrapperProtocol = SentrySwizzleWrapper
 
 @_spi(Private) @objc public class SentrySwizzleWrapper: NSObject {
     
-    static var sentrySwizzleSendActionCallbacks = [String: SentrySwizzleSendActionCallback]()
+    static let sentrySwizzleSendActionCallbacks = SentryMutex<[String: SentrySwizzleSendActionCallback]>([:])
     
     @objc public func swizzleSendAction(_ callback: @escaping SentrySwizzleSendActionCallback, forKey key: String) {
-        Self.sentrySwizzleSendActionCallbacks[key] = callback
+        let shouldInstall = Self.sentrySwizzleSendActionCallbacks.withLock { callbacks -> Bool in
+            callbacks[key] = callback
+            return callbacks.count == 1
+        }
         SentrySDKLog.debug("Swizzling sendAction for \(key)")
 
-        if Self.sentrySwizzleSendActionCallbacks.count != 1 {
+        if !shouldInstall {
             return
         }
 
@@ -36,22 +39,28 @@ typealias SentrySwizzleWrapperProtocol = SentrySwizzleWrapper
     /// For testing. We want the swizzling block above to call a static function to avoid having a block
     /// reference to an instance of this class.
     static func sendActionCalled(_ action: Selector, target: Any?, sender: Any?, event: UIEvent?) {
-        for callback in Self.sentrySwizzleSendActionCallbacks.values {
-            callback(String(cString: sel_getName(action)), target, sender, event)
+        let callbacks = Self.sentrySwizzleSendActionCallbacks.withLock { Array($0.values) }
+        let target = SentryUncheckedSendable(target)
+        let sender = SentryUncheckedSendable(sender)
+        let event = SentryUncheckedSendable(event)
+        MainActor.assumeIsolated {
+            for callback in callbacks {
+                callback(String(cString: sel_getName(action)), target.value, sender.value, event.value)
+            }
         }
     }
 
     @objc public func removeSwizzleSendAction(forKey key: String) {
-        Self.sentrySwizzleSendActionCallbacks.removeValue(forKey: key)
+        _ = Self.sentrySwizzleSendActionCallbacks.withLock { $0.removeValue(forKey: key) }
     }
     
     func removeAllCallbacks() {
-        Self.sentrySwizzleSendActionCallbacks.removeAll()
+        Self.sentrySwizzleSendActionCallbacks.withLock { $0.removeAll() }
     }
     
     // For test purposes
     static func hasCallbacks() -> Bool {
-        return sentrySwizzleSendActionCallbacks.count > 0
+        sentrySwizzleSendActionCallbacks.withLock { !$0.isEmpty }
     }
 }
 #endif

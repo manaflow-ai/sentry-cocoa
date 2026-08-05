@@ -1,12 +1,12 @@
 // swiftlint:disable missing_docs
 import Foundation
 #if os(iOS) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 
 /**
  * Settings for overriding theming components for the User Feedback Widget and Form.
  */
-@objcMembers
+@MainActor @objcMembers
 public final class SentryUserFeedbackThemeConfiguration: NSObject {
     /**
      * The font family to use for form text elements.

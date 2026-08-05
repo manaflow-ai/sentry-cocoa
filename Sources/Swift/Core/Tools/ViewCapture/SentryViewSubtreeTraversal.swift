@@ -14,14 +14,7 @@ import UIKit
 // - Included patterns use exact matching (Set.contains): "MyViewSubclass" only matches exactly "MyViewSubclass"
 //
 // This prevents accidental matches where "ChromeCameraUI" is excluded but "Camera" is included from causing crashes.
-enum SentryViewSubtreeTraversal {
-    /// Class identifier for ``CameraUI.ChromeSwiftUIView``, if it exists.
-    ///
-    /// This class name is used to identify views of this class type during subtree exclusion.
-    /// This workaround is specifically for Xcode 16 building for iOS 26 where accessing CameraUI.ModeLoupeLayer
-    /// causes a crash due to unimplemented init(layer:) initializer.
-    private static let cameraChromeSwiftUIViewClassPattern = "CameraUI.ChromeSwiftUIView"
-
+@MainActor enum SentryViewSubtreeTraversal {
     static func isExcluded(_ view: UIView, options: SentryRedactOptions) -> Bool {
         isExcluded(
             view,
@@ -69,15 +62,7 @@ enum SentryViewSubtreeTraversal {
         }
     }
 
-    static var defaultExcludedViewClassPatterns: Set<String> {
-        var result: Set<String> = []
-        #if os(iOS)
-        if #available(iOS 26.0, *) {
-            result.insert(cameraChromeSwiftUIViewClassPattern)
-        }
-        #endif
-        return result
-    }
+    static let defaultExcludedViewClassPatterns: Set<String> = []
 
     static func isExcluded(
         _ view: UIView,

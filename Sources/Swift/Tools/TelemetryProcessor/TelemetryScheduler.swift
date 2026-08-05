@@ -15,7 +15,7 @@ protocol TelemetryScheduler {
     func capture(data: Data, count: Int, telemetryType: TelemetrySchedulerItemType)
 }
 
-final class DefaultTelemetryScheduler: TelemetryScheduler {
+final class DefaultTelemetryScheduler: TelemetryScheduler, Sendable {
 
     private enum EnvelopeContentType: String {
         case log = "application/vnd.sentry.items.log+json"
@@ -27,10 +27,10 @@ final class DefaultTelemetryScheduler: TelemetryScheduler {
         let contentType: EnvelopeContentType
     }
 
-    private let transport: SentryTelemetryProcessorTransport
+    private let transport: SentryMutex<SentryTelemetryProcessorTransport>
 
     init(transport: SentryTelemetryProcessorTransport) {
-        self.transport = transport
+        self.transport = SentryMutex(transport)
     }
 
     func capture(data: Data, count: Int, telemetryType: TelemetrySchedulerItemType) {
@@ -41,7 +41,7 @@ final class DefaultTelemetryScheduler: TelemetryScheduler {
 
         let envelope = SentryEnvelope(header: SentryEnvelopeHeader.empty(), items: [envelopeItem])
 
-        transport.sendEnvelope(envelope: envelope)
+        transport.withLock { $0.sendEnvelope(envelope: envelope) }
     }
 
     private func getEnvelopeInfo(telemetryType: TelemetrySchedulerItemType) -> EnvelopeInfo {

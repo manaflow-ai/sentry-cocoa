@@ -5,9 +5,9 @@
 internal import _SentryPrivate
 import CoreGraphics
 import Foundation
-import UIKit
+public import UIKit
 
-@objcMembers
+@MainActor @objcMembers
 @_spi(Private) public class SentryViewPhotographer: NSObject, SentryViewScreenshotProvider {
     private let redactBuilder: SentryUIRedactBuilder
     private let maskRenderer: SentryMaskRenderer
@@ -44,14 +44,18 @@ import UIKit
         // The render method is synchronous and must be called on the main thread.
         // This is because the render method accesses the view hierarchy which is managed from the main thread.
         let renderedScreenshot = renderer.render(view: view)
+        let callbackQueue = dispatchQueue
 
         dispatchQueue.dispatchAsync { [maskRenderer] in
             // The mask renderer does not need to be on the main thread.
             // Moving it to a background thread to avoid blocking the main thread, therefore reducing the performance
             // impact/lag of the user interface.
             let maskedScreenshot = maskRenderer.maskScreenshot(screenshot: renderedScreenshot, size: viewSize, masking: redactRegions)
-
-            onComplete(maskedScreenshot)
+            callbackQueue.dispatchAsyncOnMainQueueIfNotMainThread {
+                MainActor.assumeIsolated {
+                    onComplete(maskedScreenshot)
+                }
+            }
         }
     }
 

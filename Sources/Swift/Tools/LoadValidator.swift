@@ -37,13 +37,9 @@ import MachO
             resultHandler?(false)
             return
         }
+        let work = SentryMutex((runtime: objcRuntimeWrapper, resultHandler: resultHandler))
         dispatchQueueWrapper.dispatchAsync {
-            var duplicateFound = false
-            defer {
-                resultHandler?(duplicateFound)
-            }
-            
-            let loadValidatorAddress = self.getCurrentFrameworkTextPointer()
+            let loadValidatorAddress = LoadValidator.getCurrentFrameworkTextPointer()
             let loadValidatorAddressValue = UInt(bitPattern: loadValidatorAddress)
             // The SDK looks for classes on each image. We might find:
             //   - Unrelated Classes, nothing to do
@@ -51,32 +47,36 @@ import MachO
             //   - Classes containing `SentryDependencyContainerSwiftHelper`, it also is a duplicate
             let isCurrentImageContainingLoadValidator = (loadValidatorAddressValue >= imageAddress) && (loadValidatorAddressValue < (imageAddress + imageSize))
 
-            var classCount: UInt32 = 0
-            imageName.withCString { cImageName in
-                if let classNames = objcRuntimeWrapper.copyClassNamesForImage(cImageName, &classCount) {
-                    defer {
-                        free(classNames)
-                    }
-                    for j in 0..<Int(classCount) {
-                        let className = classNames[j]
-                        // Since we are iterating over all classes in the image, we need to be extra careful not to do unnecessary work
-                        // or calling `NSClassFromString` since that can lead to issues (see `SentrySubClassFinder` for more details).
-                        let name = String(cString: UnsafeRawPointer(className).assumingMemoryBound(to: UInt8.self))
-                        if name == self.targetClassName && isCurrentImageContainingLoadValidator {
-                            // Skip the implementation of the class we are using as a proxy for being loaded that exists in the same binary that this instance of LoadValidator was loaded in
-                            continue
-                        }
-                        if name.contains(self.targetClassName) {
-                            var message = ["❌ Sentry SDK was loaded multiple times in the same binary ❌"]
-                            message.append("⚠️ This can cause undefined behavior, crashes, or duplicate reporting.")
-                            message.append("Ensure the SDK is linked only once, found `\(self.targetClassName)` class in image path: \(imageName)")
-                            SentrySDKLog.error(message.joined(separator: "\n"))
-                            duplicateFound = true
-                            
-                            break
+            let duplicateFound = work.withLock { work in
+                var duplicateFound = false
+                var classCount: UInt32 = 0
+                imageName.withCString { cImageName in
+                    if let classNames = work.runtime.copyClassNamesForImage(cImageName, &classCount) {
+                        defer { free(classNames) }
+                        for j in 0..<Int(classCount) {
+                            let className = classNames[j]
+                            // Since we are iterating over all classes in the image, we need to be extra careful not to do unnecessary work
+                            // or calling `NSClassFromString` since that can lead to issues (see `SentrySubClassFinder` for more details).
+                            let name = String(cString: UnsafeRawPointer(className).assumingMemoryBound(to: UInt8.self))
+                            if name == LoadValidator.targetClassName && isCurrentImageContainingLoadValidator {
+                                // Skip the implementation of the class we are using as a proxy for being loaded that exists in the same binary that this instance of LoadValidator was loaded in
+                                continue
+                            }
+                            if name.contains(LoadValidator.targetClassName) {
+                                var message = ["❌ Sentry SDK was loaded multiple times in the same binary ❌"]
+                                message.append("⚠️ This can cause undefined behavior, crashes, or duplicate reporting.")
+                                message.append("Ensure the SDK is linked only once, found `\(LoadValidator.targetClassName)` class in image path: \(imageName)")
+                                SentrySDKLog.error(message.joined(separator: "\n"))
+                                duplicateFound = true
+                                break
+                            }
                         }
                     }
                 }
+                return duplicateFound
+            }
+            work.withLock { work in
+                work.resultHandler?(duplicateFound)
             }
         }
     }

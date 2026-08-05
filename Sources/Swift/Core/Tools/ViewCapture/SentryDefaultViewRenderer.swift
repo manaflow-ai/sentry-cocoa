@@ -5,6 +5,7 @@
 import UIKit
 
 final class SentryDefaultViewRenderer: NSObject, SentryViewRenderer {
+    @MainActor
     func render(view: UIView) -> UIImage {
         let image = UIGraphicsImageRenderer(size: view.bounds.size).image { _ in
             view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)

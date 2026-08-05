@@ -1,7 +1,7 @@
 // swiftlint:disable missing_docs
 #if (os(iOS) || os(tvOS)) && !SENTRY_NO_UI_FRAMEWORK
 import Foundation
-import UIKit
+public import UIKit
 
 @objcMembers
 @_spi(Private) public final class SentryMaskingPreviewView: UIView {
@@ -44,11 +44,13 @@ import UIKit
         fatalError("init(coder:) has not been implemented")
     }
     
-    deinit {
-        displayLink?.invalidate()
-    }
-    
     public override func didMoveToSuperview() {
+        guard superview != nil else {
+            displayLink?.invalidate()
+            displayLink = nil
+            return
+        }
+
         if displayLink == nil {
             displayLink = CADisplayLink(target: self, selector: #selector(update))
             displayLink?.add(to: .main, forMode: .common)

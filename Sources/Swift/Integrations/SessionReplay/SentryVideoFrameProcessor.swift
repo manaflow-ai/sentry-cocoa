@@ -6,7 +6,7 @@ import CoreGraphics
 import Foundation
 import UIKit
 
-class SentryVideoFrameProcessor {
+final class SentryVideoFrameProcessor: @unchecked Sendable {
     private enum AppendFrameResult {
         case success
         case notReady
@@ -64,7 +64,7 @@ class SentryVideoFrameProcessor {
     }
 
     // swiftlint:disable function_body_length cyclomatic_complexity
-    func processFrames(videoWriterInput: AVAssetWriterInput, onCompletion: @escaping (Result<SentryRenderVideoResult, Error>) -> Void) {
+    func processFrames(videoWriterInput: AVAssetWriterInput, onCompletion: @escaping @Sendable (Result<SentryRenderVideoResult, Error>) -> Void) {
         guard !isFinished else { return }
 
         // Use the recommended loop pattern for AVAssetWriterInput
@@ -207,7 +207,7 @@ class SentryVideoFrameProcessor {
         return .success
     }
 
-    func finishVideo(frameIndex: Int, onCompletion completion: @escaping (Result<SentryRenderVideoResult, Error>) -> Void) {
+    func finishVideo(frameIndex: Int, onCompletion completion: @escaping @Sendable (Result<SentryRenderVideoResult, Error>) -> Void) {
         guard !isFinished else { return }; isFinished = true
 
         // Note: This method is expected to be called from the asset worker queue and *not* the processing queue.

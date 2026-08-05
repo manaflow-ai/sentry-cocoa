@@ -1,10 +1,10 @@
 internal import _SentryPrivate
 
 #if os(iOS) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 
 /// API for interacting with the feature User Feedback
-@objc public final class SentryFeedbackAPI: NSObject {
+@MainActor @objc public final class SentryFeedbackAPI: NSObject {
 
     #if !SDK_V10
     /// Show the feedback widget button.

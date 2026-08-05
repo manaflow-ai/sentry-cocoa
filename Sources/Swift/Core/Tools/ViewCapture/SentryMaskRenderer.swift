@@ -3,7 +3,7 @@
 
 import UIKit
 
-protocol SentryMaskRenderer {
+protocol SentryMaskRenderer: Sendable {
     func maskScreenshot(screenshot image: UIImage, size: CGSize, masking: [SentryRedactRegion]) -> UIImage
 }
 

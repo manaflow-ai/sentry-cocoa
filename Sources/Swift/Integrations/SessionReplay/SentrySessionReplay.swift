@@ -2,7 +2,7 @@
 import Foundation
 #if (os(iOS) || os(tvOS)) && !SENTRY_NO_UI_FRAMEWORK
 internal import _SentryPrivate
-import UIKit
+public import UIKit
 
 /// Tracks full-session segment boundaries while video rendering happens asynchronously.
 ///
@@ -90,7 +90,7 @@ private struct SessionSegmentState {
 
 // swiftlint:disable type_body_length
 @objcMembers
-@_spi(Private) public class SentrySessionReplay: NSObject {
+@_spi(Private) public class SentrySessionReplay: NSObject, @unchecked Sendable {
     public private(set) var isFullSession: Bool {
         get { state.withLock { $0.isFullSession } }
         set { state.withLock { $0.isFullSession = newValue } }
@@ -184,7 +184,7 @@ private struct SessionSegmentState {
         stopCaptureScheduler()
     }
 
-    public func start(rootView: UIView?, fullSession: Bool) {
+    @MainActor public func start(rootView: UIView?, fullSession: Bool) {
         SentrySDKLog.debug("[Session Replay] Starting session replay with full session: \(fullSession)")
         guard !isRunning else {
             SentrySDKLog.debug("[Session Replay] Session replay is already running, not starting again")
@@ -343,7 +343,7 @@ private struct SessionSegmentState {
         }
 
         // `lastScreenshotAt` is main-thread confined with the capture pacing state.
-        let startedAt = runOnMainThreadSync { lastScreenshotAt }
+        let startedAt = runOnMainThreadSync { self.lastScreenshotAt }
         self.replayType = replayType
         startFullReplay(startedAt: startedAt)
         let replayStart = dateProvider.date().addingTimeInterval(-replayOptions.errorReplayDuration - (Double(replayOptions.frameRate) / 2.0))
@@ -381,7 +381,7 @@ private struct SessionSegmentState {
     /// Early exits after stage 1 still call `prepareFullSessionSegmentsIfNeeded` so session
     /// segments are cut on time even when no screenshot is taken.
     // swiftlint:disable function_body_length cyclomatic_complexity
-    private func captureFrameIfNeeded(isInteractiveRunLoopMode: Bool = false) {
+    @MainActor private func captureFrameIfNeeded(isInteractiveRunLoopMode: Bool = false) {
         guard isRunning else { return }
 
         let now = dateProvider.date()
@@ -671,7 +671,7 @@ private struct SessionSegmentState {
     private func prepareSegment(
         from segmentStart: Date,
         until date: Date,
-        completion: (() -> Void)? = nil
+        completion: (@Sendable () -> Void)? = nil
     ) -> Bool {
         SentrySDKLog.debug("[Session Replay] Preparing segment until date: \(date)")
         guard date > segmentStart else {
@@ -708,7 +708,7 @@ private struct SessionSegmentState {
         startedAt: Date,
         endedAt: Date,
         replayType: SentryReplayType,
-        completion: (() -> Void)? = nil
+        completion: (@Sendable () -> Void)? = nil
     ) {
         SentrySDKLog.debug("[Session Replay] Creating replay video started at date: \(startedAt), replayType: \(replayType)")
         // Creating a video is computationally expensive, therefore perform it on a background queue.
@@ -782,7 +782,8 @@ private struct SessionSegmentState {
         }
     }
 
-    private func takeScreenshot(timestamp: Date, completion: @escaping (TimeInterval) -> Void) -> Bool {
+    @MainActor
+    private func takeScreenshot(timestamp: Date, completion: @escaping @Sendable (TimeInterval) -> Void) -> Bool {
         guard let rootView = rootView else {
             SentrySDKLog.debug("[Session Replay] Not taking screenshot, reason: root view is nil")
             return false
@@ -818,20 +819,18 @@ private struct SessionSegmentState {
         return true
     }
 
-    private func runOnMainThread(_ block: @escaping () -> Void) {
+    private func runOnMainThread(_ block: @escaping @MainActor @Sendable () -> Void) {
         if Thread.isMainThread {
-            block()
+            MainActor.assumeIsolated(block)
         } else {
-            DispatchQueue.main.async(execute: block)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated(block)
+            }
         }
     }
 
-    private func runOnMainThreadSync<T>(_ block: () -> T) -> T {
-        if Thread.isMainThread {
-            return block()
-        } else {
-            return DispatchQueue.main.sync(execute: block)
-        }
+    private func runOnMainThreadSync<T: Sendable>(_ block: @escaping @MainActor @Sendable () -> T) -> T {
+        SentryMainActor.runSync(block)
     }
 }
 // swiftlint:enable type_body_length

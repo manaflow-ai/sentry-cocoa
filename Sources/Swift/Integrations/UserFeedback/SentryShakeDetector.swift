@@ -30,7 +30,7 @@ public final class SentryShakeDetector: NSObject {
     // Both motionEnded (main thread) and enable/disable (main thread in practice)
     // access this flag. UIKit's motionEnded is always dispatched on the main thread,
     // and the SDK calls enable/disable from main-thread integration lifecycle.
-    private static var enabled = false
+    @MainActor private static var enabled = false
 
     private struct State {
         var swizzled = false
@@ -43,7 +43,7 @@ public final class SentryShakeDetector: NSObject {
     /// Enables shake gesture detection. On iOS/iPadOS, swizzles `UIWindow.motionEnded(_:with:)`
     /// the first time it is called, and from then on posts `.SentryShakeDetected`
     /// whenever a shake is detected. No-op on non-iOS platforms.
-    public static func enable() {
+    @MainActor public static func enable() {
         swizzleState.withLock { state in
             if state.swizzled {
                 return
@@ -66,7 +66,8 @@ public final class SentryShakeDetector: NSObject {
             }
 
             let replacementIMP = imp_implementationWithBlock({ (self: UIWindow, motion: UIEvent.EventSubtype, event: UIEvent?) in
-                if SentryShakeDetector.enabled && motion == .motionShake {
+                let isEnabled = MainActor.assumeIsolated { SentryShakeDetector.enabled }
+                if isEnabled && motion == .motionShake {
                     let now = CACurrentMediaTime()
                     let shouldPost = SentryShakeDetector.swizzleState.withLock { state in
                         if now - state.lastShakeTimestamp > SentryShakeDetector.cooldownSeconds {
@@ -99,7 +100,7 @@ public final class SentryShakeDetector: NSObject {
 
     /// Disables shake gesture detection. Does not un-swizzle `UIWindow`; it only suppresses
     /// the notification so the overhead is negligible. No-op on non-iOS platforms.
-    public static func disable() {
+    @MainActor public static func disable() {
         enabled = false
         SentrySDKLog.debug("Shake detector: disabled")
     }

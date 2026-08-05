@@ -3,14 +3,14 @@
 import Foundation
 #if os(iOS) && !SENTRY_NO_UI_FRAMEWORK
 internal import _SentryPrivate
-import UIKit
+public import UIKit
 
-protocol SentryUserFeedbackFormViewModelDelegate: NSObjectProtocol {
+@MainActor protocol SentryUserFeedbackFormViewModelDelegate: NSObjectProtocol {
     func submitFeedback()
     func cancel()
 }
 
-@objcMembers
+@MainActor @objcMembers
 @_spi(Private) public class SentryUserFeedbackFormViewModel: NSObject {
     let config: SentryUserFeedbackConfiguration
     unowned let controller: SentryUserFeedbackFormController

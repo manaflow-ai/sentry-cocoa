@@ -3,6 +3,11 @@ internal import _SentryPrivate
 
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
 import UIKit
+
+private struct SentryDeviceAppStateSnapshot: Sendable {
+    let osVersion: String
+    let vendorId: String?
+}
 #endif
 
 @_spi(Private) @objc public final class SentryAppStateManager: NSObject {
@@ -26,10 +31,21 @@ import UIKit
             // Is the current process being traced or not? If it is a debugger is attached.
             let isDebugging = crashWrapper.isBeingTraced
 
-            let device = UIDevice.current
-            let vendorId = device.identifierForVendor?.uuidString
+            let deviceSnapshot = SentryMainActor.runSync {
+                let device = UIDevice.current
+                return SentryDeviceAppStateSnapshot(
+                    osVersion: device.systemVersion,
+                    vendorId: device.identifierForVendor?.uuidString
+                )
+            }
 
-            return SentryAppState(releaseName: releaseName, osVersion: device.systemVersion, vendorId: vendorId, isDebugging: isDebugging, systemBootTimestamp: sysctlWrapper.systemBootTimestamp)
+            return SentryAppState(
+                releaseName: releaseName,
+                osVersion: deviceSnapshot.osVersion,
+                vendorId: deviceSnapshot.vendorId,
+                isDebugging: isDebugging,
+                systemBootTimestamp: sysctlWrapper.systemBootTimestamp
+            )
         }
         _buildCurrentAppState = buildCurrentAppState
         let updateAppState: (@escaping (SentryAppState) -> Void) -> Void = { block in

@@ -11,12 +11,6 @@ final class SentrySystemEventBreadcrumbs: NSObject {
     private let notificationCenterWrapper: SentryNSNotificationCenterWrapper
     private let dateProvider: SentryCurrentDateProvider
 
-    #if os(iOS)
-    // Track whether we enabled these device notifications so we can disable them on stop
-    private var didEnableBatteryMonitoring = false
-    private var didBeginGeneratingOrientationNotifications = false
-    #endif
-
     /// Whether system event observers are currently registered.
     private var isSubscribedToSystemEvents = false
 
@@ -84,8 +78,8 @@ final class SentrySystemEventBreadcrumbs: NSObject {
         isSubscribedToSystemEvents = true
 
         #if os(iOS)
-        initBatteryObserver(currentDeviceProvider.uiDeviceWrapper.currentDevice)
-        initOrientationObserver(currentDeviceProvider.uiDeviceWrapper.currentDevice)
+        initBatteryObserver()
+        initOrientationObserver()
         initKeyboardVisibilityObserver()
         #endif
         initScreenshotObserver()
@@ -109,34 +103,19 @@ final class SentrySystemEventBreadcrumbs: NSObject {
         notificationCenterWrapper.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
         notificationCenterWrapper.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
 
-        // Disable device notifications that we enabled
-        let currentDevice = currentDeviceProvider.uiDeviceWrapper.currentDevice
-        if didEnableBatteryMonitoring {
-            currentDevice.isBatteryMonitoringEnabled = false
-            didEnableBatteryMonitoring = false
-        }
-        if didBeginGeneratingOrientationNotifications {
-            currentDevice.endGeneratingDeviceOrientationNotifications()
-            didBeginGeneratingOrientationNotifications = false
-        }
         #endif
     }
 
     // MARK: - Battery Observer
 
     #if os(iOS)
-    private func initBatteryObserver(_ currentDevice: UIDevice) {
-        if !currentDevice.isBatteryMonitoringEnabled {
-            currentDevice.isBatteryMonitoringEnabled = true
-            didEnableBatteryMonitoring = true
-        }
-
+    private func initBatteryObserver() {
         // Posted when the battery level changes.
         notificationCenterWrapper.addObserver(
             self,
             selector: #selector(batteryStateChanged(_:)),
             name: UIDevice.batteryLevelDidChangeNotification,
-            object: currentDevice
+            object: nil
         )
 
         // Posted when battery state changes.
@@ -144,34 +123,30 @@ final class SentrySystemEventBreadcrumbs: NSObject {
             self,
             selector: #selector(batteryStateChanged(_:)),
             name: UIDevice.batteryStateDidChangeNotification,
-            object: currentDevice
+            object: nil
         )
     }
 
     @objc private func batteryStateChanged(_ notification: Notification) {
         // Notifications for battery level change are sent no more frequently than once per minute
-        guard let currentDevice = notification.object as? UIDevice else {
-            SentrySDKLog.debug("UIDevice of NSNotification was nil. Won't create battery changed breadcrumb.")
-            return
-        }
-
-        let batteryData = getBatteryStatus(currentDevice)
+        _ = notification
+        let batteryData = getBatteryStatus()
 
         let crumb = Breadcrumb(level: .info, category: "device.event", data: batteryData)
         crumb.type = "system"
         delegate?.add(crumb)
     }
 
-    private func getBatteryStatus(_ currentDevice: UIDevice) -> [String: Any] {
+    private func getBatteryStatus() -> [String: Any] {
         // borrowed and adapted from
         // https://github.com/apache/cordova-plugin-battery-status/blob/master/src/ios/CDVBattery.m
-        let currentState = currentDevice.batteryState
+        let currentState = currentDeviceProvider.uiDeviceWrapper.batteryState
 
         var isPlugged = false // UIDeviceBatteryStateUnknown or UIDeviceBatteryStateUnplugged
         if currentState == .charging || currentState == .full {
             isPlugged = true
         }
-        let currentLevel = currentDevice.batteryLevel
+        let currentLevel = currentDeviceProvider.uiDeviceWrapper.batteryLevel
         var batteryData: [String: Any] = [:]
 
         // W3C spec says level must be null if it is unknown
@@ -190,28 +165,20 @@ final class SentrySystemEventBreadcrumbs: NSObject {
 
     // MARK: - Orientation Observer
 
-    private func initOrientationObserver(_ currentDevice: UIDevice) {
-        if !currentDevice.isGeneratingDeviceOrientationNotifications {
-            currentDevice.beginGeneratingDeviceOrientationNotifications()
-            didBeginGeneratingOrientationNotifications = true
-        }
-
+    private func initOrientationObserver() {
         // Posted when the orientation of the device changes.
         notificationCenterWrapper.addObserver(
             self,
             selector: #selector(orientationChanged(_:)),
             name: UIDevice.orientationDidChangeNotification,
-            object: currentDevice
+            object: nil
         )
     }
 
     @objc private func orientationChanged(_ notification: Notification) {
-        guard let currentDevice = notification.object as? UIDevice else {
-            return
-        }
-
+        _ = notification
         let crumb = Breadcrumb(level: .info, category: "device.orientation")
-        let currentOrientation = currentDevice.orientation
+        let currentOrientation = currentDeviceProvider.uiDeviceWrapper.orientation
 
         // Ignore changes in device orientation if unknown, face up, or face down.
         if !currentOrientation.isValidInterfaceOrientation {

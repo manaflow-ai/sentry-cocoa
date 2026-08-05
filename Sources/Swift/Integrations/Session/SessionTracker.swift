@@ -125,7 +125,7 @@ final class SessionTracker {
     /// It is called when an App. is receiving events / It is in the foreground and when we receive a
     /// @c SentryHybridSdkDidBecomeActiveNotification. There is no guarantee that this method is called
     /// once or twice. We need to ensure that we execute it only once.
-    /// @discussion This also works when using SwiftUI or Scenes, as UIKit posts a
+    /// @discussion This also works when using UIKit scenes, as UIKit posts a
     /// @c didBecomeActiveNotification regardless of whether your app uses scenes, see
     /// https://developer.apple.com/documentation/uikit/uiapplicationdelegate/1622956-applicationdidbecomeactive.
     /// @warning Hybrid SDKs must only post this notification if they are running in the foreground
@@ -153,14 +153,13 @@ final class SessionTracker {
             return
         }
 
-        let options = self.options
+        let sessionTrackingIntervalMillis = options.sessionTrackingIntervalMillis
         let now = dateProvider.date()
 
         // Reset synchronously to avoid racing with willResignActive().
         lastInForeground.withLock { $0 = nil }
 
-        dispatchQueue.dispatchAsync { [weak self] in
-            guard let self else { return }
+        dispatchQueue.dispatchAsync {
             let hub = SentrySDKInternal.currentHub()
             let lastInForeground = SentryDependencyContainerSwiftHelper.readTimestampLastInForeground()
 
@@ -170,11 +169,11 @@ final class SessionTracker {
                 // don't want a new session if the user switches to another app for just a few seconds.
                 let secondsInBackground = now.timeIntervalSince(lastInForeground)
 
-                if secondsInBackground * 1_000 >= Double(options.sessionTrackingIntervalMillis) {
+                if secondsInBackground * 1_000 >= Double(sessionTrackingIntervalMillis) {
                     SentrySDKLog.debug("App was in the background for \(secondsInBackground) seconds. Starting a new session.")
                     hub.endSession(withTimestamp: lastInForeground)
                     hub.startSession()
-                    reevaluateProfileSessionSampleRateIfNeeded()
+                    Self.reevaluateProfileSessionSampleRateIfNeeded()
                 } else {
                     SentrySDKLog.debug("App was in the background for \(secondsInBackground) seconds. Not starting a new session.")
                 }
@@ -183,7 +182,7 @@ final class SessionTracker {
                 // wait until the app is in the foreground to start a session.
                 SentrySDKLog.debug("App was in the foreground for the first time. Starting a new session.")
                 hub.startSession()
-                reevaluateProfileSessionSampleRateIfNeeded()
+                Self.reevaluateProfileSessionSampleRateIfNeeded()
             }
             SentryDependencyContainerSwiftHelper.deleteTimestampLastInForeground()
         }
@@ -217,7 +216,7 @@ final class SessionTracker {
     }
 
     // Private helper for profiling session sample-rate reevaluation.
-    private func reevaluateProfileSessionSampleRateIfNeeded() {
+    private static func reevaluateProfileSessionSampleRateIfNeeded() {
     #if !(os(watchOS) || os(tvOS) || os(visionOS))
         if SentryDependencyContainerSwiftHelper.hasProfilingOptions() {
             sentry_reevaluateSessionSampleRate()

@@ -92,7 +92,12 @@ private final class CrashReportFilterBridge: NSObject, SentryCrashReportFilter {
     }
     
     @objc public func sendAllReports(completion: @escaping ([Any]?, Bool, (any Error)?) -> Void) {
-        sentryCrash.sendAllReports(completion: completion)
+        let completionState = SentryMutex(completion)
+        sentryCrash.sendAllReports { reports, completed, error in
+            completionState.withLock { callback in
+                callback(reports, completed, error)
+            }
+        }
     }
 
     // Only visible for testing

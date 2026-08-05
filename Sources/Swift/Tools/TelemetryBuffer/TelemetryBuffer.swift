@@ -8,12 +8,14 @@ protocol TelemetryBuffer<Item> {
     func capture() -> TimeInterval
 }
 
-final class DefaultTelemetryBuffer<InternalBufferType: InternalTelemetryBuffer<Item>, Item: TelemetryItem>: TelemetryBuffer, TelemetryBufferItemForwardingDelegate {
+/// Mutable buffer state is confined to the injected serial queue. `capture()` synchronizes with
+/// that queue, and `sending` transfers each item into it exactly once.
+final class DefaultTelemetryBuffer<InternalBufferType: InternalTelemetryBuffer<Item>, Item: TelemetryItem>: TelemetryBuffer, TelemetryBufferItemForwardingDelegate, @unchecked Sendable where InternalBufferType: SendableMetatype, Item: SendableMetatype {
     struct Config: TelemetryBufferConfig {
         let flushTimeout: TimeInterval
         let maxItemCount: Int
         let maxBufferSizeBytes: Int
-        var capturedDataCallback: (Data, Int) -> Void = { _, _ in }
+        var capturedDataCallback: @Sendable (Data, Int) -> Void = { _, _ in }
     }
 
     private let config: Config
@@ -59,8 +61,11 @@ final class DefaultTelemetryBuffer<InternalBufferType: InternalTelemetryBuffer<I
     /// - Important: Scope enrichment must be applied to the item BEFORE calling this method.
     ///             The buffer no longer applies scope automatically.
     func add(_ item: Item) {
+        let transferredItem = SentryMutex(item)
         dispatchQueue.dispatchAsync { [weak self] in
-            self?.encodeAndBuffer(item: item)
+            transferredItem.withLock { item in
+                self?.encodeAndBuffer(item: item)
+            }
         }
     }
 

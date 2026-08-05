@@ -11,7 +11,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface SentryObjCSwiftUISpanHelper : NSObject
+@interface SentryObjCScreenSpanHelper : NSObject
 
 @property (nonatomic, readonly) BOOL hasSpan;
 
@@ -101,11 +101,11 @@ SENTRY_NO_INIT
 
 - (void)reportFullyDisplayed;
 
-- (SentryObjCSwiftUISpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
+- (SentryObjCScreenSpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
                                                  waitForFullDisplay:(BOOL)waitforFullDisplay
                                                       transactionId:(SentrySpanId *)transactionId;
 
-+ (SentryObjCSwiftUISpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
++ (SentryObjCScreenSpanHelper *)startTimeToDisplayTrackerForScreen:(NSString *)screenName
                                                  waitForFullDisplay:(BOOL)waitforFullDisplay
                                                       transactionId:(SentrySpanId *)transactionId;
 

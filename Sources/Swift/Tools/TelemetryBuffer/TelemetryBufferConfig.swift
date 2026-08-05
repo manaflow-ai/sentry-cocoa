@@ -5,5 +5,5 @@ protocol TelemetryBufferConfig<Item> {
     var maxItemCount: Int { get }
     var maxBufferSizeBytes: Int { get }
     
-    var capturedDataCallback: (_ data: Data, _ count: Int) -> Void { get }
+    var capturedDataCallback: @Sendable (_ data: Data, _ count: Int) -> Void { get }
 }

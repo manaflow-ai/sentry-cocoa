@@ -10,11 +10,11 @@ private enum SentryPackageManagerOption: UInt {
 }
 
 #if SWIFT_PACKAGE
-private var SENTRY_PACKAGE_INFO: SentryPackageManagerOption = .swiftPackageManager
+private let SENTRY_PACKAGE_INFO = SentryMutex(SentryPackageManagerOption.swiftPackageManager)
 #elseif COCOAPODS
-private var SENTRY_PACKAGE_INFO: SentryPackageManagerOption = .cocoaPods
+private let SENTRY_PACKAGE_INFO = SentryMutex(SentryPackageManagerOption.cocoaPods)
 #else
-private var SENTRY_PACKAGE_INFO: SentryPackageManagerOption = .unknown
+private let SENTRY_PACKAGE_INFO = SentryMutex(SentryPackageManagerOption.unknown)
 #endif
 
 @objc
@@ -46,18 +46,20 @@ private var SENTRY_PACKAGE_INFO: SentryPackageManagerOption = .unknown
 
     @objc
     public static func global() -> [String: String]? {
-        return getSentrySDKPackage(SENTRY_PACKAGE_INFO)
+        return getSentrySDKPackage(SENTRY_PACKAGE_INFO.withLock { $0 })
     }
 
     #if SENTRY_TEST || SENTRY_TEST_CI
     @objc
     public static func setPackageManager(_ manager: UInt) {
-        SENTRY_PACKAGE_INFO = SentryPackageManagerOption(rawValue: manager) ?? .unknown
+        SENTRY_PACKAGE_INFO.withLock {
+            $0 = SentryPackageManagerOption(rawValue: manager) ?? .unknown
+        }
     }
 
     @objc
     public static func resetPackageManager() {
-        SENTRY_PACKAGE_INFO = .unknown
+        SENTRY_PACKAGE_INFO.withLock { $0 = .unknown }
     }
     #endif
 }

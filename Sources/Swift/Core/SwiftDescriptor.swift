@@ -2,7 +2,7 @@
 import Foundation
 
 #if canImport(UIKit) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 #endif
 
 @objc
@@ -15,7 +15,7 @@ import UIKit
 
     /// UIViewControllers aren't available on watchOS
 #if canImport(UIKit) && !os(watchOS) && !SENTRY_NO_UI_FRAMEWORK
-    @objc
+    @MainActor @objc
     public static func getViewControllerClassName(_ object: UIViewController) -> String {
         if let object = object as? SentryUIViewControllerDescriptor {
             return object.sentryName
@@ -30,7 +30,7 @@ import UIKit
     /// We build it ourselves instead of using `String(describing:)`, because the default `UIView`
     /// description embeds `frame = (x y; w h)`. Those coordinates can leak which key a user tapped in
     /// custom PIN/passcode views, so we never include the frame.
-    @objc
+    @MainActor @objc
     public static func getSanitizedViewDescription(_ view: UIView) -> String {
         let className = getObjectClassName(view)
         let pointer = Unmanaged.passUnretained(view).toOpaque()

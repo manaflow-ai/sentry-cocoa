@@ -7,11 +7,11 @@ import UIKit
 
 // Declare the application provider block at the top level to prevent capturing 'self'
 // from the dependency container, which would create cyclic dependencies and memory leaks.
-let defaultApplicationProvider: () -> SentryApplication? = {
+let defaultApplicationProvider: @Sendable () -> SentryApplication? = {
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
-    return UIApplication.shared
+    return SentryUIKitApplication()
 #elseif os(macOS) && !SENTRY_NO_UI_FRAMEWORK
-    return NSApplication.shared
+    return SentryAppKitApplication()
 #else
     return nil
 #endif
@@ -39,8 +39,7 @@ extension SentryFileManager: SentryFileManagerProtocol { }
 
     // MARK: Private
 
-    private static let instanceLock = NSRecursiveLock()
-    private static var instance = SentryDependencyContainer()
+    private static let instanceState = SentryMutex(SentryDependencyContainer())
     private let paramLock = NSRecursiveLock()
 
     private func getLazyVar<T>(_ keyPath: ReferenceWritableKeyPath<SentryDependencyContainer, T?>, builder: () -> T) -> T {
@@ -74,28 +73,27 @@ extension SentryFileManager: SentryFileManagerProtocol { }
     }
 
     @objc public static func sharedInstance() -> SentryDependencyContainer {
-        instanceLock.synchronized {
-            return instance
-        }
+        instanceState.withLock { $0 }
     }
 
     /**
      * Resets all dependencies.
      */
     @objc public static func reset() {
-        instanceLock.synchronized {
-            // Access _startOptions directly instead of through the paramLock-protected getter
-            // to avoid a deadlock: instanceLock → paramLock here vs paramLock → instanceLock
-            // in lazy var builders that transitively call sharedInstance(). This is safe because
-            // instanceLock blocks the only external write path (SentrySDK.setStart → sharedInstance).
-            let currentOptions = instance._startOptions
-            instance.reachability.removeAllObservers()
-#if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
-            instance._framesTracker?.stop()
-#endif
-            instance = SentryDependencyContainer()
-            instance._startOptions = currentOptions
+        let previous = instanceState.withLock { instance in
+            let replacement = SentryDependencyContainer()
+            replacement.startOptions = instance.startOptions
+            let previous = instance
+            instance = replacement
+            return previous
         }
+
+        // Cleanup runs after publishing the replacement so callbacks cannot recursively enter
+        // the singleton mutex while it is held.
+        previous.reachability.removeAllObservers()
+#if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
+        previous._framesTracker?.stop()
+#endif
     }
 
 #if SENTRY_TEST || SENTRY_TEST_CI
@@ -363,19 +361,23 @@ extension SentryFileManager: SentryFileManagerProtocol { }
                 guard let options = self.startOptions else {
                     return nil
                 }
+                let optionsTransfer = SentryUncheckedSendable(options)
 
-                let viewRenderer: SentryViewRenderer
-                if options.screenshot.enableViewRendererV2 {
-                    viewRenderer = SentryViewRendererV2(enableFastViewRendering: options.screenshot.enableFastViewRendering)
-                } else {
-                    viewRenderer = SentryDefaultViewRenderer()
+                return SentryMainActor.runSyncUnchecked {
+                    let viewRenderer: SentryViewRenderer
+                    if optionsTransfer.value.screenshot.enableViewRendererV2 {
+                        viewRenderer = SentryViewRendererV2(enableFastViewRendering: optionsTransfer.value.screenshot.enableFastViewRendering)
+                    } else {
+                        viewRenderer = SentryDefaultViewRenderer()
+                    }
+
+                    let photographer = SentryViewPhotographer(
+                        renderer: viewRenderer,
+                        redactOptions: optionsTransfer.value.screenshot,
+                        enableMaskRendererV2: optionsTransfer.value.screenshot.enableViewRendererV2
+                    )
+                    return SentryScreenshotSource(photographer: photographer)
                 }
-
-                let photographer = SentryViewPhotographer(
-                    renderer: viewRenderer,
-                    redactOptions: options.screenshot,
-                    enableMaskRendererV2: options.screenshot.enableViewRendererV2)
-                return SentryScreenshotSource(photographer: photographer)
             }
         }
         // Keep a setter (a `lazy var` was settable) so tests can inject a mock source.

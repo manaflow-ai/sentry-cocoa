@@ -10,7 +10,7 @@ import Foundation
  * macCatalyst.
  */
 @_spi(Private) @objc public
-final class SentryWatchdogTerminationTracker: NSObject {
+final class SentryWatchdogTerminationTracker: NSObject, @unchecked Sendable {
     
     @objc public static let ExceptionType: String = "WatchdogTermination"
     @objc public static let ExceptionValue: String = "The OS watchdog terminated your app, possibly because it overused RAM."

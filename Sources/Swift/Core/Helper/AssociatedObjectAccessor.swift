@@ -24,7 +24,7 @@ struct AssociatedObjectAccessor<T> {
     /// Each key owns a token with a stable address, so distinct keys do not collide.
     /// The generic type provides compile-time safety but does not affect Objective-C storage.
     /// The pointer is unretained to avoid ARC traffic and is valid only while the key is alive.
-    struct Key {
+    struct Key: @unchecked Sendable {
         private final class Token {}
 
         /// Token with fixed pointer address

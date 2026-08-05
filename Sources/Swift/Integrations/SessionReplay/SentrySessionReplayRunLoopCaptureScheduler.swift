@@ -5,11 +5,11 @@ import Foundation
 
 @_spi(Private) public protocol SentrySessionReplayRunLoopCaptureScheduler: AnyObject {
     // The token owns the installed observer so stale stops from an old replay cannot remove a newer replay's observer.
-    func start(token: AnyObject, capture: @escaping (_ isInteractiveRunLoopMode: Bool) -> Void)
+    func start(token: AnyObject, capture: @escaping @MainActor (_ isInteractiveRunLoopMode: Bool) -> Void)
     func stop(token: AnyObject)
 }
 
-final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopObserver>: SentrySessionReplayRunLoopCaptureScheduler {
+final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopObserver>: SentrySessionReplayRunLoopCaptureScheduler, @unchecked Sendable {
     private var observer: T?
     private var token: AnyObject?
     private var didProcessRunLoopWork = false
@@ -33,19 +33,23 @@ final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopOb
         self.isValidObserver = isValidObserver
     }
 
-    func start(token: AnyObject, capture: @escaping (Bool) -> Void) {
+    func start(token: AnyObject, capture: @escaping @MainActor (Bool) -> Void) {
+        let token = SentryUncheckedSendable(token)
+        let capture = SentryUncheckedSendable(capture)
         runOnMainThreadSync { [weak self] in
-            self?.startOnMainThread(token: token, capture: capture)
+            self?.startOnMainThread(token: token.value, capture: capture.value)
         }
     }
 
     func stop(token: AnyObject) {
+        let token = SentryUncheckedSendable(token)
         runOnMainThreadSync { [weak self] in
-            self?.stopOnMainThread(token: token)
+            self?.stopOnMainThread(token: token.value)
         }
     }
 
-    private func startOnMainThread(token: AnyObject, capture: @escaping (Bool) -> Void) {
+    @MainActor
+    private func startOnMainThread(token: AnyObject, capture: @escaping @MainActor (Bool) -> Void) {
         if let currentToken = self.token {
             guard currentToken !== token else { return }
             removeCurrentObserver()
@@ -69,7 +73,9 @@ final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopOb
                 self.shouldCapture(activity: activity)
             else { return }
 
-            capture(self.currentRunLoopMode() == .tracking)
+            MainActor.assumeIsolated {
+                capture(self.currentRunLoopMode() == .tracking)
+            }
         }
         guard let observer = observer else { return }
 
@@ -78,11 +84,13 @@ final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopOb
         addObserver(CFRunLoopGetMain(), observer, .commonModes)
     }
 
+    @MainActor
     private func stopOnMainThread(token: AnyObject) {
         guard self.token === token else { return }
         removeCurrentObserver()
     }
 
+    @MainActor
     private func removeCurrentObserver() {
         didProcessRunLoopWork = false
         self.token = nil
@@ -92,6 +100,7 @@ final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopOb
         removeObserver(CFRunLoopGetMain(), observer, .commonModes)
     }
 
+    @MainActor
     private func shouldCapture(activity: CFRunLoopActivity) -> Bool {
         if activity.contains(.afterWaiting)
             || activity.contains(.beforeTimers)
@@ -107,12 +116,8 @@ final class DefaultSentrySessionReplayRunLoopCaptureScheduler<T: SentryRunLoopOb
         return true
     }
 
-    private func runOnMainThreadSync(_ block: () -> Void) {
-        if Thread.isMainThread {
-            block()
-        } else {
-            DispatchQueue.main.sync(execute: block)
-        }
+    private func runOnMainThreadSync(_ block: @escaping @MainActor () -> Void) {
+        SentryMainActor.runSyncUnchecked(block)
     }
 }
 

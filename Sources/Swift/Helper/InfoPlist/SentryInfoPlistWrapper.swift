@@ -48,7 +48,11 @@ final class SentryInfoPlistWrapper: SentryInfoPlistWrapperProvider {
             return nil
         }
         guard let typedValue = value as? T else {
-            throw SentryInfoPlistError.unableToCastValue(key: key, value: value, type: T.self)
+            throw SentryInfoPlistError.unableToCastValue(
+                key: key,
+                valueDescription: String(describing: value),
+                typeDescription: String(describing: T.self)
+            )
         }
         return typedValue
     }

@@ -1,9 +1,9 @@
 import Foundation
 #if os(iOS) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 
 /// Callback used to configure a user feedback presentation.
-public typealias SentryUserFeedbackConfigurationCallback = (SentryUserFeedbackConfiguration) -> Void
+public typealias SentryUserFeedbackConfigurationCallback = @MainActor (SentryUserFeedbackConfiguration) -> Void
 
 /**
  * The settings to use for how the user feedback form is presented, what data is required and how
@@ -12,7 +12,7 @@ public typealias SentryUserFeedbackConfigurationCallback = (SentryUserFeedbackCo
  * Use this to customize the form shown by `SentrySDK.feedback.show()`,
  * `SentrySDK.FeedbackForm`, or `sentryFeedback(isPresented:)`.
  */
-@objcMembers
+@MainActor @objcMembers
 public final class SentryUserFeedbackConfiguration: NSObject {
     /**
      * Whether or not to show animations, like for presenting and dismissing the form.

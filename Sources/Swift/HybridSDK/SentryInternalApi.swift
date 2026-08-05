@@ -86,7 +86,7 @@ public struct SentryInternalApi {
     }
 
     /// Sets a custom log output handler for SDK log messages.
-    public func setLogOutput(_ output: ((String) -> Void)?) {
+    public func setLogOutput(_ output: SentryLogOutput?) {
         SentrySDKLog.setOutput(output)
     }
 

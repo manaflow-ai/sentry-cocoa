@@ -2,28 +2,25 @@
 internal import _SentryPrivate
 
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 #endif
 
 #if (os(macOS) || targetEnvironment(macCatalyst)) && !SENTRY_NO_UI_FRAMEWORK
 import Cocoa
 #endif
 
-@objc @_spi(Private) public final class SentryBreadcrumbTracker: NSObject {
+@objc @_spi(Private) public final class SentryBreadcrumbTracker: NSObject, @unchecked Sendable {
     
     private static let swizzleSendActionKey = "SentryBreadcrumbTrackerSwizzleSendAction"
-    // Use a static variable to hold a unique pointer for the swizzle key
-    // Similar to Objective-C's `static const void *key = &key;` pattern
-    private static var swizzleViewDidAppearKeyStorage: UInt8 = 0
-    private static var swizzleViewDidAppearKey: UnsafeRawPointer = {
-        return withUnsafePointer(to: &swizzleViewDidAppearKeyStorage) { UnsafeRawPointer($0) }
-    }()
+    private static let swizzleViewDidAppearKey = SentryTypedSwizzle.Key()
     
-    private weak var delegate: SentryBreadcrumbDelegate?
+    private final class State {
+        weak var delegate: SentryBreadcrumbDelegate?
+        var notificationObservers: [NSObjectProtocol] = []
+    }
+
+    private let state = SentryMutex(State())
     private let reportAccessibilityIdentifier: Bool
-    
-    // Store notification observer tokens for cleanup
-    private var notificationObservers: [NSObjectProtocol] = []
     
     @objc(initReportAccessibilityIdentifier:)
     init(reportAccessibilityIdentifier: Bool) {
@@ -37,7 +34,7 @@ import Cocoa
     
     @objc(startWithDelegate:)
     func start(with delegate: SentryBreadcrumbDelegate) {
-        self.delegate = delegate
+        state.withLock { $0.delegate = delegate }
         addEnabledCrumb()
         trackApplicationNotifications()
         trackNetworkConnectivityChanges()
@@ -57,14 +54,16 @@ import Cocoa
         SentryDependencyContainer.sharedInstance().swizzleWrapper.removeSwizzleSendAction(forKey: Self.swizzleSendActionKey)
 #endif // (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
         
-        // Remove all notification observers
+        let observers = state.withLock { state in
+            let observers = state.notificationObservers
+            state.notificationObservers.removeAll()
+            state.delegate = nil
+            return observers
+        }
         let notificationCenter = NotificationCenter.default
-        for observer in notificationObservers {
+        for observer in observers {
             notificationCenter.removeObserver(observer)
         }
-        notificationObservers.removeAll()
-        
-        delegate = nil
         stopTrackNetworkConnectivityChanges()
     }
     
@@ -93,9 +92,9 @@ import Cocoa
             crumb.type = "system"
             crumb.setData(value: "LOW_MEMORY", key: "action")
             crumb.message = "Low memory"
-            self.delegate?.add(crumb)
+            self.sendToDelegate(crumb)
         }
-        notificationObservers.append(memoryWarningObserver)
+        storeNotificationObserver(memoryWarningObserver)
         
         let willEnterForegroundObserver = notificationCenter.addObserver(
             forName: UIApplication.willEnterForegroundNotification,
@@ -105,7 +104,7 @@ import Cocoa
             guard let self = self else { return }
             self.addBreadcrumb(type: "navigation", category: "app.lifecycle", level: .info, dataKey: "state", dataValue: "foreground")
         }
-        notificationObservers.append(willEnterForegroundObserver)
+        storeNotificationObserver(willEnterForegroundObserver)
         
         let didBecomeActiveObserver = notificationCenter.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
@@ -115,7 +114,7 @@ import Cocoa
             guard let self = self else { return }
             self.addBreadcrumb(type: "navigation", category: "app.lifecycle", level: .info, dataKey: "state", dataValue: "active")
         }
-        notificationObservers.append(didBecomeActiveObserver)
+        storeNotificationObserver(didBecomeActiveObserver)
         
         let willResignActiveObserver = notificationCenter.addObserver(
             forName: UIApplication.willResignActiveNotification,
@@ -125,7 +124,7 @@ import Cocoa
             guard let self = self else { return }
             self.addBreadcrumb(type: "navigation", category: "app.lifecycle", level: .info, dataKey: "state", dataValue: "inactive")
         }
-        notificationObservers.append(willResignActiveObserver)
+        storeNotificationObserver(willResignActiveObserver)
         
         let didEnterBackgroundObserver = notificationCenter.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
@@ -135,7 +134,7 @@ import Cocoa
             guard let self = self else { return }
             self.addBreadcrumb(type: "navigation", category: "app.lifecycle", level: .info, dataKey: "state", dataValue: "background")
         }
-        notificationObservers.append(didEnterBackgroundObserver)
+        storeNotificationObserver(didEnterBackgroundObserver)
     }
 #endif // (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
     
@@ -151,7 +150,7 @@ import Cocoa
             guard let self = self else { return }
             self.addBreadcrumb(type: "navigation", category: "app.lifecycle", level: .info, dataKey: "state", dataValue: "active")
         }
-        notificationObservers.append(didBecomeActiveObserver)
+        storeNotificationObserver(didBecomeActiveObserver)
         
         let willResignActiveObserver = notificationCenter.addObserver(
             forName: NSApplication.willResignActiveNotification,
@@ -161,7 +160,7 @@ import Cocoa
             guard let self = self else { return }
             self.addBreadcrumb(type: "navigation", category: "app.lifecycle", level: .info, dataKey: "state", dataValue: "inactive")
         }
-        notificationObservers.append(willResignActiveObserver)
+        storeNotificationObserver(willResignActiveObserver)
     }
 #endif // os(macOS)
     
@@ -172,22 +171,32 @@ import Cocoa
     private func stopTrackNetworkConnectivityChanges() {
         SentryDependencyContainer.sharedInstance().reachability.remove(self)
     }
+
+    private func storeNotificationObserver(_ observer: NSObjectProtocol) {
+        state.withLock { $0.notificationObservers.append(observer) }
+    }
+
+    private func sendToDelegate(_ crumb: Breadcrumb) {
+        let delegate = state.withLock { $0.delegate }
+        delegate?.add(crumb)
+    }
     
     private func addBreadcrumb(type: String, category: String, level: SentryLevel, dataKey: String, dataValue: String) {
         let crumb = Breadcrumb(level: level, category: category)
         crumb.type = type
         crumb.setData(value: dataValue, key: dataKey)
-        delegate?.add(crumb)
+        sendToDelegate(crumb)
     }
     
     private func addEnabledCrumb() {
         let crumb = Breadcrumb(level: .info, category: "started")
         crumb.type = "debug"
         crumb.message = "Breadcrumb Tracking"
-        delegate?.add(crumb)
+        sendToDelegate(crumb)
     }
     
 #if (os(iOS) || os(tvOS) || os(visionOS)) && !SENTRY_NO_UI_FRAMEWORK
+    @MainActor
     private static func avoidSender(_ sender: Any?, forTarget target: Any?, action: String) -> Bool {
         guard let sender = sender, let target = target else {
             return true
@@ -209,45 +218,51 @@ import Cocoa
     private func swizzleSendAction() {
         SentryDependencyContainer.sharedInstance().swizzleWrapper.swizzleSendAction(
             { [weak self] action, target, sender, event in
-                guard let self = self else { return }
-                
-                if Self.avoidSender(sender, forTarget: target, action: action) {
-                    return
-                }
-                
-                var data: [String: Any]?
-                if let event = event {
-                    for touch in event.allTouches ?? [] {
-                        if let view = touch.view,
-                           touch.phase == .cancelled || touch.phase == .ended {
-                            data = Self.extractData(from: view, includeAccessibilityIdentifier: self.reportAccessibilityIdentifier)
+                MainActor.assumeIsolated {
+                    guard let self = self else { return }
+
+                    if Self.avoidSender(sender, forTarget: target, action: action) {
+                        return
+                    }
+
+                    var data: [String: Any]?
+                    if let event = event {
+                        for touch in event.allTouches ?? [] {
+                            if let view = touch.view,
+                               touch.phase == .cancelled || touch.phase == .ended {
+                                data = Self.extractData(from: view, includeAccessibilityIdentifier: self.reportAccessibilityIdentifier)
+                            }
                         }
                     }
+
+                    let crumb = Breadcrumb(level: .info, category: "touch", data: data ?? [:])
+                    crumb.type = "user"
+                    crumb.message = action
+                    self.sendToDelegate(crumb)
                 }
-                
-                let crumb = Breadcrumb(level: .info, category: "touch", data: data ?? [:])
-                crumb.type = "user"
-                crumb.message = action
-                self.delegate?.add(crumb)
             },
             forKey: Self.swizzleSendActionKey
         )
     }
     
     private func swizzleViewDidAppear() {
+        let tracker = WeakReference(value: self)
         SentrySwizzleWrapperHelper.swizzleViewDidAppear(
-            { [weak self] viewController in
-                guard let self = self else { return }
-                
-                let crumb = Breadcrumb(level: .info, category: "ui.lifecycle", data: Self.fetchInfo(about: viewController))
-                crumb.type = "navigation"
-                self.delegate?.add(crumb)
+            { viewController in
+                MainActor.assumeIsolated {
+                    guard let self = tracker.value else { return }
+
+                    let crumb = Breadcrumb(level: .info, category: "ui.lifecycle", data: Self.fetchInfo(about: viewController))
+                    crumb.type = "navigation"
+                    self.sendToDelegate(crumb)
+                }
             },
-            forKey: Self.swizzleViewDidAppearKey
+            forKey: Self.swizzleViewDidAppearKey.pointer
         )
     }
     
     @_spi(Private)
+    @MainActor
     public static func extractData(from view: UIView, includeAccessibilityIdentifier: Bool) -> [String: Any] {
         var result: [String: Any] = ["view": SwiftDescriptor.getSanitizedViewDescription(view)]
 
@@ -270,6 +285,7 @@ import Cocoa
         return result
     }
 
+    @MainActor
     private static func fetchInfo(about controller: UIViewController) -> [String: Any] {
         var info: [String: Any] = [:]
         
@@ -309,7 +325,7 @@ extension SentryBreadcrumbTracker: SentryReachabilityObserver {
         let crumb = Breadcrumb(level: .info, category: "device.connectivity")
         crumb.type = "connectivity"
         crumb.setData(value: typeDescription, key: "connectivity")
-        delegate?.add(crumb)
+        sendToDelegate(crumb)
     }
 }
 // swiftlint:enable missing_docs

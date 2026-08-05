@@ -1,7 +1,7 @@
 import Foundation
 
 //Values defined in the RRWeb protocol
-enum TouchEventPhase: Int {
+enum TouchEventPhase: Int, Sendable {
     case unknown = 0
     case start   = 7
     case move    = 8

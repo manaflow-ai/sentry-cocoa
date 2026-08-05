@@ -1,20 +1,19 @@
 import Foundation
 #if os(iOS) && !SENTRY_NO_UI_FRAMEWORK
-import UIKit
+public import UIKit
 
 /**
  * Settings for whether to show the widget and how it should appear.
  *
  * - note: The managed widget is deprecated and will be removed in v10.
  */
-@objcMembers
+@MainActor @objcMembers
 public final class SentryUserFeedbackWidgetConfiguration: NSObject {
     private var _autoInject: Bool = true
 
     /**
      * Automatically inject the widget button into the application UI.
      * - note: Default: `true`
-     * - warning: Does not currently work for SwiftUI apps. See https://docs.sentry.io/platforms/apple/user-feedback/#swiftui
      * - deprecated: The managed widget is deprecated and will be removed in v10. Present the
      * feedback form from your own UI instead.
      */

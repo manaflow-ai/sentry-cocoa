@@ -2,12 +2,12 @@
 import Foundation
 #if (os(iOS) || os(tvOS)) && !SENTRY_NO_UI_FRAMEWORK
 internal import _SentryPrivate
-import UIKit
+public import UIKit
 
 @objcMembers
-@_spi(Private) public class SentryTouchTracker: NSObject {
+@_spi(Private) public class SentryTouchTracker: NSObject, @unchecked Sendable {
     
-    private struct TouchEvent {
+    private struct TouchEvent: Sendable {
         let x: CGFloat
         let y: CGFloat
         let timestamp: TimeInterval
@@ -32,7 +32,7 @@ import UIKit
         }
     }
     
-    private struct ExtractedTouchData {
+    private struct ExtractedTouchData: Sendable {
         let identifier: ObjectIdentifier
         let position: CGPoint
         let phase: UITouch.Phase
@@ -68,7 +68,7 @@ import UIKit
         self.init(dateProvider: dateProvider, scale: scale, dispatchQueue: SentryDispatchQueueWrapper())
     }
     
-    public func trackTouchFrom(event: UIEvent) {
+    @MainActor public func trackTouchFrom(event: UIEvent) {
         guard let touches = event.allTouches else { return }
         let timestamp = event.timestamp
         
@@ -181,13 +181,28 @@ import UIKit
         
         var result = [SentryRRWebEvent]()
         
-        var touches = [TouchInfo]()
+        struct TouchSnapshot: Sendable {
+            let id: Int
+            let startEvent: TouchEvent?
+            let endEvent: TouchEvent?
+            let moveEvents: [TouchEvent]
+        }
+        let touches = SentryMutex<[TouchSnapshot]>([])
         dispatchQueue.dispatchSync { [self] in
             // Include both active and orphaned touches to preserve all events
-            touches = Array(trackedTouches.values) + orphanedTouches
+            touches.withLock { snapshots in
+                snapshots = (Array(trackedTouches.values) + orphanedTouches).map {
+                    TouchSnapshot(
+                        id: $0.id,
+                        startEvent: $0.startEvent,
+                        endEvent: $0.endEvent,
+                        moveEvents: $0.moveEvents
+                    )
+                }
+            }
         }
-        
-        for info in touches {
+
+        for info in touches.withLock({ $0 }) {
             if let infoStart = info.startEvent, infoStart.timestamp >= startTimeInterval && infoStart.timestamp <= endTimeInterval {
                 result.append(RRWebTouchEvent(timestamp: now.addingTimeInterval(infoStart.timestamp - uptime), touchId: info.id, x: Float(infoStart.x), y: Float(infoStart.y), phase: .start))
             }

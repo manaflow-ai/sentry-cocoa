@@ -6,8 +6,8 @@ import UIKit
 
 typealias SessionReplayIntegrationScope = NotificationCenterProvider & RateLimitsProvider & CurrentDateProvider & RandomProvider & FileManagerProvider & CrashWrapperProvider & ReachabilityProvider & GlobalEventProcessorProvider & DispatchQueueWrapperProvider & ApplicationProvider & DispatchFactoryProvider & SessionReplayCaptureSchedulerProvider & SessionReplayBreadcrumbConverterProvider
 
-// This is static because it will be used for swizzling and would cause retain cycles
-private var touchTracker: SentryTouchTracker?
+// This is static because it is used by the process-wide event swizzle.
+private let touchTrackerState = SentryMutex<SentryTouchTracker?>(nil)
 
 // swiftlint:disable type_body_length
 // This class should be final but we are subclassing it in tests
@@ -42,8 +42,8 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
 
     /// Getter to get the current application at runtime
     ///
-    /// When initializing the Sentry SDK from ``SwiftUI/App.init`` the ``UIKit/UIApplication.shared`` returns `nil`, therefore we need to
-    /// dynamically get it later, even if the application is not changing during the life-time of the app
+    /// Early SDK initialization can occur before ``UIKit/UIApplication.shared`` is available, so
+    /// resolve it dynamically later even though the application identity does not change.
     private let getApplication: () -> SentryApplication?
 
     /// We need to use this variable to identify whether rate limiting was ever activated for session replay
@@ -123,7 +123,7 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
         SentrySDKInternal.currentHub().registerSessionListener(self)
         dependencies.reachability.add(self)
 
-        // Create observers of the application lifecycle for UIKit and SwiftUI
+        // Create observers for UIKit application and scene lifecycle events.
         notificationCenter.addObserver(self, selector: #selector(applicationDidBecomeActiveHandler), name: UIApplication.didBecomeActiveNotification, object: nil)
         notificationCenter.addObserver(self, selector: #selector(sceneDidActivateHandler), name: UIScene.didActivateNotification, object: nil)
     }
@@ -134,7 +134,7 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
         notificationCenter.removeObserver(self, name: UIScene.didActivateNotification, object: nil)
         notificationCenter.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
         SentrySDKInternal.currentHub().unregisterSessionListener(self)
-        touchTracker = nil
+        touchTrackerState.withLock { $0 = nil }
         stopCurrentReplay()
     }
 
@@ -146,18 +146,21 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
     // MARK: - Initialization Helpers
     
     private static func createViewPhotographer(options: Options) -> SentryViewPhotographer {
-        var viewRenderer: SentryViewRenderer
-        
-        if options.sessionReplay.enableViewRendererV2 {
-            SentrySDKLog.debug("[Session Replay] Setting up view renderer v2, fast view rendering: \(options.sessionReplay.enableFastViewRendering)")
-            viewRenderer = SentryViewRendererV2(enableFastViewRendering: options.sessionReplay.enableFastViewRendering)
-        } else {
-            SentrySDKLog.debug("[Session Replay] Setting up default view renderer")
-            viewRenderer = SentryDefaultViewRenderer()
+        let options = SentryUncheckedSendable(options)
+        return SentryMainActor.runSyncUnchecked {
+            let viewRenderer: SentryViewRenderer
+
+            if options.value.sessionReplay.enableViewRendererV2 {
+                SentrySDKLog.debug("[Session Replay] Setting up view renderer v2, fast view rendering: \(options.value.sessionReplay.enableFastViewRendering)")
+                viewRenderer = SentryViewRendererV2(enableFastViewRendering: options.value.sessionReplay.enableFastViewRendering)
+            } else {
+                SentrySDKLog.debug("[Session Replay] Setting up default view renderer")
+                viewRenderer = SentryDefaultViewRenderer()
+            }
+            // We are using the flag for the view renderer V2 also for the mask renderer V2, as it would
+            // just introduce another option without affecting the SDK user experience.
+            return SentryViewPhotographer(renderer: viewRenderer, redactOptions: options.value.sessionReplay, enableMaskRendererV2: options.value.sessionReplay.enableViewRendererV2)
         }
-        // We are using the flag for the view renderer V2 also for the mask renderer V2, as it would
-        // just introduce another option without affecting the SDK user experience.
-        return SentryViewPhotographer(renderer: viewRenderer, redactOptions: options.sessionReplay, enableMaskRendererV2: options.sessionReplay.enableViewRendererV2)
     }
     
     private static func createDispatchQueues(dependencies: SessionReplayIntegrationScope) -> (processing: SentryDispatchQueueWrapper, assetWorker: SentryDispatchQueueWrapper) {
@@ -171,10 +174,13 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
     private func setupTouchTrackerIfNeeded(options: Options) {
         guard options.enableSwizzling else { return }
         SentrySDKLog.debug("[Session Replay] Setting up touch tracker, scale: \(replayOptions.sizeScale)")
-        touchTracker = SentryTouchTracker(dateProvider: dateProvider, scale: options.sessionReplay.sizeScale)
+        let tracker = SentryTouchTracker(dateProvider: dateProvider, scale: options.sessionReplay.sizeScale)
+        touchTrackerState.withLock { $0 = tracker }
         SentrySwizzleWrapperHelper.swizzleSendEvent { event in
             guard let event = event else { return }
-            touchTracker?.trackTouchFrom(event: event)
+            MainActor.assumeIsolated {
+                touchTrackerState.withLock { $0 }?.trackTouchFrom(event: event)
+            }
         }
     }
     
@@ -230,8 +236,8 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
             isPendingStart = false
             return
         }
-        // SwiftUI can initialize the SDK before UIApplication.shared is available, so resolve the
-        // application lazily on every retry instead of keeping the value from integration init.
+        // Early initialization can precede UIApplication.shared, so resolve the application lazily
+        // on every retry instead of keeping the value from integration initialization.
         guard let application = getApplication() else {
             return SentrySDKLog.debug("[Session Replay] Cannot get application, not starting replay")
         }
@@ -306,11 +312,13 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
         let replayMaker = createReplayMaker(outputPath: sessionDocs.path, fullSession: fullSession)
         let newSessionReplay = SentrySessionReplay(
             replayOptions: replayOptions, replayFolderPath: sessionDocs, screenshotProvider: screenshotProvider,
-            replayMaker: replayMaker, breadcrumbConverter: breadcrumbConverter, touchTracker: touchTracker,
+            replayMaker: replayMaker, breadcrumbConverter: breadcrumbConverter, touchTracker: touchTrackerState.withLock { $0 },
             dateProvider: dateProvider, delegate: self, captureScheduler: captureScheduler)
 
         self.sessionReplay = newSessionReplay
-        newSessionReplay.start(rootView: rootView, fullSession: fullSession)
+        SentryMainActor.runSyncUnchecked {
+            newSessionReplay.start(rootView: rootView, fullSession: fullSession)
+        }
         addBackgroundForegroundObservers()
         if isApplicationStatePaused.withLock({ $0 }) {
             newSessionReplay.pause()
@@ -430,7 +438,7 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
         sessionReplay?.replayTags = tags 
     }
 
-    @objc public func showMaskPreview(_ opacity: Float) {
+    @MainActor @objc public func showMaskPreview(_ opacity: Float) {
         SentrySDKLog.debug("[Session Replay] Showing mask preview with opacity: \(opacity)")
         guard crashWrapper.isBeingTraced else { 
             SentrySDKLog.debug("[Session Replay] No tracing is active, not showing mask preview")
@@ -446,7 +454,7 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
         if let pv = previewView { window.addSubview(pv) }
     }
 
-    @objc public func hideMaskPreview() { 
+    @MainActor @objc public func hideMaskPreview() {
         SentrySDKLog.debug("[Session Replay] Hiding mask preview")
         previewView?.removeFromSuperview()
         previewView = nil 
@@ -510,7 +518,7 @@ public class SentrySessionReplayIntegration: NSObject, SwiftIntegration, SentryS
     
     func moveCurrentReplay() { replayFileManager.moveCurrentReplay() }
     
-    func getTouchTracker() -> SentryTouchTracker? { touchTracker }
+    func getTouchTracker() -> SentryTouchTracker? { touchTrackerState.withLock { $0 } }
     
     // Helper function to cast SentrySessionReplayIntegration to SentryIntegrationProtocol
     // Used only for testing with `addInstalledIntegration` or it fails to compile

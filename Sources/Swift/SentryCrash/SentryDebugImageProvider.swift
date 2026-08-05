@@ -5,7 +5,16 @@ internal import _SentryPrivate
 
     private static let debugImageType = "macho"
 
-    var binaryImageCache: SentryBinaryImageCache = Dependencies.binaryImageCache
+    let binaryImageCache: SentryBinaryImageCache
+
+    @objc public override convenience init() {
+        self.init(binaryImageCache: Dependencies.binaryImageCache)
+    }
+
+    init(binaryImageCache: SentryBinaryImageCache) {
+        self.binaryImageCache = binaryImageCache
+        super.init()
+    }
 
     /**
      * Returns a list of debug images that are being referenced by the given frames.

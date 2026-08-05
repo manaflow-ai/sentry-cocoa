@@ -33,13 +33,16 @@ final class SentryCrashInstallationReporter: SentryCrashInstallation {
     }
 
     override func sendAllReports(completion onCompletion: SentryCrashReportFilterCompletion?) {
+        let completion = SentryMutex(onCompletion)
         super.sendAllReports { filteredReports, completed, error in
             if let error = error {
                 SentrySDKLog.error("Error sending crash reports: \(error.localizedDescription)")
             }
             SentrySDKLog.debug("Sent \(String(describing: filteredReports?.count)) crash report(s)")
-            if completed, let onCompletion = onCompletion {
-                onCompletion(filteredReports, completed, error)
+            if completed {
+                completion.withLock { callback in
+                    callback?(filteredReports, completed, error)
+                }
             }
         }
     }

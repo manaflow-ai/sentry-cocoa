@@ -2,7 +2,7 @@
 import Foundation
 
 @objc
-@_spi(Private) public enum SentryReplayType: Int {
+@_spi(Private) public enum SentryReplayType: Int, Sendable {
     case session
     case buffer
 }

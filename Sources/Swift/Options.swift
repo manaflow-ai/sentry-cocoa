@@ -697,8 +697,12 @@
     @available(iOSApplicationExtension, unavailable)
     @objc public var configureUserFeedback: SentryUserFeedbackConfigurationCallback? {
         didSet {
-            let config = SentryUserFeedbackConfiguration()
-            configureUserFeedback?(config)
+            let callback = configureUserFeedback
+            let config = SentryMainActor.runSyncUnchecked {
+                let config = SentryUserFeedbackConfiguration()
+                callback?(config)
+                return config
+            }
             userFeedbackConfiguration = config
         }
     }

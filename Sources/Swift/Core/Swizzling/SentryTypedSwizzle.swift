@@ -12,7 +12,7 @@ enum SentryTypedSwizzle {
     ///
     /// Keep the key alive for as long as its swizzle identity is needed. Different key instances
     /// always have different identities, even when used for the same method.
-    struct Key {
+    struct Key: @unchecked Sendable {
         /// A reference type whose stable address provides the key's identity across `Key` copies.
         private final class Token {}
 

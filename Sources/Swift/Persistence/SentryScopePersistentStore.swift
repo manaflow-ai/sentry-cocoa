@@ -2,7 +2,7 @@
 internal import _SentryPrivate
 
 @objc
-enum SentryScopeField: UInt, CaseIterable {
+enum SentryScopeField: UInt, CaseIterable, Sendable {
     case context
     case user
     case dist
@@ -177,6 +177,10 @@ enum SentryScopeField: UInt, CaseIterable {
             return
         }
         fileManager.write(data, toPath: path)
+    }
+
+    func writeEncodedDataToDisk(field: SentryScopeField, data: Data) {
+        writeFieldToDisk(field: field, data: data)
     }
     
     private func readFieldFromDisk<T>(field: SentryScopeField, decode: (Data) -> T?) -> T? {
