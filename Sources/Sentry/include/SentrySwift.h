@@ -29,7 +29,13 @@
 #        import <UIKit/UIKit.h>
 #    endif // SENTRY_HAS_UIKIT
 
-#    if __has_include("Sentry-Swift.h")
+#    if defined(SWIFT_PACKAGE)
+// The source package exposes a public Swift facade named Sentry and keeps the
+// implementation in SentrySwift. Importing the facade's generated header while
+// SentrySwift itself is compiling creates a module cycle in Xcode consumers.
+// SwiftPM guarantees the implementation module through the target dependency.
+@import SentrySwift;
+#    elif __has_include("Sentry-Swift.h")
 #        import "Sentry-Swift.h"
 #    elif __has_include(<Sentry/Sentry-Swift.h>)
 #        import <Sentry/Sentry-Swift.h>
