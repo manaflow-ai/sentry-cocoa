@@ -11,7 +11,7 @@ let package = Package(
         .macOS(.v14),
     ],
     products: [
-        .library(name: "Sentry", targets: ["Sentry", "SentryCppHelper"]),
+        .library(name: "Sentry", targets: ["SentryFacade", "SentryCppHelper"]),
     ],
     targets: [
         .target(
@@ -62,7 +62,7 @@ let package = Package(
             ]
         ),
         .target(
-            name: "Sentry",
+            name: "SentryFacade",
             dependencies: ["SentrySwift", "SentryObjCInternal"],
             path: "Sources/SentryFacade"
         ),
@@ -75,7 +75,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SentrySourceForkTests",
-            dependencies: ["Sentry", "SentrySwift"],
+            dependencies: ["SentryFacade", "SentrySwift"],
             path: "Tests/SourceForkTests"
         ),
     ],

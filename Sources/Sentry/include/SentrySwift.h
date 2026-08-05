@@ -30,8 +30,8 @@
 #    endif // SENTRY_HAS_UIKIT
 
 #    if defined(SWIFT_PACKAGE)
-// The source package exposes a public Swift facade named Sentry and keeps the
-// implementation in SentrySwift. Importing the facade's generated header while
+// The source package exposes a public Swift facade and keeps the implementation
+// in SentrySwift. Importing a facade-generated header while
 // SentrySwift itself is compiling creates a module cycle in Xcode consumers.
 // SwiftPM guarantees the implementation module through the target dependency.
 @import SentrySwift;
