@@ -13,14 +13,12 @@ on:
   workflow_dispatch:
   pull_request:
 
-# Permissions configuration:
-# - 'contents: write' is required to allow the workflow to commit changes to the repository
-#   when updating the tooling version files and creating branches for pull requests.
-# - 'pull-requests: write' is required to allow the workflow to create pull requests
-#   using the peter-evans/create-pull-request action when tooling version updates are available.
+# Pull-request runs only inspect the base revision to calculate file filters. The updater job
+# is limited to trusted schedule and manual runs below, so contributor-controlled Makefiles
+# never execute with a write-capable token.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
 
 # Concurrency configuration:
 # - For pull requests, we use a workflow-and-ref–scoped group to keep runs isolated per PR while
@@ -36,11 +34,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # This job detects if the PR contains changes that require running auto-update-tools.
-  # If yes, the job will output a flag that will be used by the next job to run the auto-update-tools.
-  # If no, the job will output a flag that will be used by the next job to skip running the auto-update-tools.
-  # At the end of this workflow, we run a check that validates that either auto_update_tools-required-check passed or were
-  # skipped, which is called auto_update_tools-required-check.
+  # This job detects if the PR contains changes that require tooling validation.
+  # The filter file is read from the trusted base revision above.
   files-changed:
     name: Detect File Changes
     runs-on: ubuntu-latest
@@ -49,6 +44,12 @@ jobs:
       run_auto_update_tools_for_prs: ${{ steps.changes.outputs.run_auto_update_tools_for_prs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The filter configuration must come from a trusted revision. dorny/paths-filter
+          # reads the PR diff through the API, so no contributor code is needed here.
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -57,9 +58,14 @@ jobs:
           filters: .github/file-filters.yml
 
   auto-update-tools:
-    if: github.event_name != 'pull_request' || needs.files-changed.outputs.run_auto_update_tools_for_prs == 'true'
+    # Never run the Makefile from a pull request. Schedule and manual dispatch are the only
+    # events allowed to receive write permissions and create update branches.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: files-changed
     runs-on: macos-15
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Generate GitHub App Token
         id: app_token
@@ -72,7 +78,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ github.event_name != 'pull_request' && steps.app_token.outputs.token || github.token }}
+          token: ${{ steps.app_token.outputs.token }}
+          persist-credentials: false
 
       - name: Install Tools
         run: make init
@@ -131,11 +138,42 @@ jobs:
         uses: ./.github/actions/ci-diagnostics
         if: failure()
 
-  # This check validates that either auto-update-tools passed or was skipped, which allows us
-  # to make auto-update-tools a required check with only running the auto-update-tools when required.
-  # So, we don't have to run auto-update-tools, for example, for unrelated changes.
+  auto-update-tools-pr-validation:
+    name: Validate tooling versions (PR)
+    # Validate contributor changes only on an isolated, read-only GitHub-hosted runner. The
+    # write-capable updater above never executes for pull requests.
+    if: github.event_name == 'pull_request' && needs.files-changed.outputs.run_auto_update_tools_for_prs == 'true'
+    needs: files-changed
+    runs-on: macos-15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Tools
+        run: make init
+      - name: Update tooling versions
+        run: make update-versions
+      - name: Check tooling versions
+        run: make check-versions
+      - name: Print git status and changes
+        run: |
+          git status
+          git diff HEAD
+      - name: Run CI Diagnostics
+        uses: ./.github/actions/ci-diagnostics
+        if: failure()
+
+  # This check validates that the trusted updater or the read-only PR validation passed or was
+  # skipped, which lets the aggregate check remain required without running either job for
+  # unrelated changes.
   auto_update_tools-required-check:
-    needs: [files-changed, auto-update-tools]
+    needs: [files-changed, auto-update-tools, auto-update-tools-pr-validation]
     name: Auto Update Tools
     # This is necessary since a failed/skipped dependent job would cause this job to be skipped
     if: always()
@@ -144,6 +182,10 @@ jobs:
       # If any jobs we depend on fails gets cancelled or times out, this job will fail.
       # Skipped jobs are not considered failures.
       - name: Check for failures
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        if: >-
+          needs.files-changed.result == 'failure' || needs.files-changed.result == 'cancelled' ||
+          needs.auto-update-tools.result == 'failure' || needs.auto-update-tools.result == 'cancelled' ||
+          needs.auto-update-tools-pr-validation.result == 'failure' ||
+          needs.auto-update-tools-pr-validation.result == 'cancelled'
         run: |
           echo "One of the auto-update-tools jobs has failed." && exit 1
