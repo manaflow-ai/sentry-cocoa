@@ -10,5 +10,14 @@ permissions:
 
 jobs:
   changelog-preview:
+    # The called workflow receives the scoped GITHUB_TOKEN automatically. Do not inherit
+    # repository and organization secrets into a pull_request_target job.
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
     uses: getsentry/craft/.github/workflows/changelog-preview.yml@667b5f5669552a35990a11ff6ac1131febb07446 # v2
-    secrets: inherit
+    with:
+      # Keep the downloaded Craft binary on the same immutable release as the workflow.
+      # The called workflow otherwise defaults to the mutable latest release.
+      craft-version: "2.27.0"
