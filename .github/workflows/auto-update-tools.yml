@@ -182,6 +182,10 @@ jobs:
       # If any jobs we depend on fails gets cancelled or times out, this job will fail.
       # Skipped jobs are not considered failures.
       - name: Check for failures
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        if: >-
+          needs.files-changed.result == 'failure' || needs.files-changed.result == 'cancelled' ||
+          needs.auto-update-tools.result == 'failure' || needs.auto-update-tools.result == 'cancelled' ||
+          needs.auto-update-tools-pr-validation.result == 'failure' ||
+          needs.auto-update-tools-pr-validation.result == 'cancelled'
         run: |
           echo "One of the auto-update-tools jobs has failed." && exit 1
