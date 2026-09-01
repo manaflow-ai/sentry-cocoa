@@ -9,9 +9,52 @@ permissions:
   statuses: write
 
 jobs:
+  verify-craft-release:
+    name: Verify pinned Craft release
+    # Fail before calling the reusable workflow if the requested release or binary is missing.
+    # This prevents its historical missing-release fallback from silently selecting latest.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify release and binary asset
+        env:
+          CRAFT_VERSION: "2.27.0"
+          CRAFT_SHA256: "bfe87d62671e12d280e4113335e7c9d55dc3711600fb50e31e5b55456370a151"
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_json=$(gh api \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/getsentry/craft/releases/tags/${CRAFT_VERSION}")
+
+          tag_name=$(jq -r '.tag_name // empty' <<<"$release_json")
+          # jq's // treats false as missing, so preserve an explicit draft=false value.
+          is_draft=$(jq -r 'if has("draft") then .draft else true end' <<<"$release_json")
+          asset_url=$(jq -r '[.assets[]? | select(.name == "craft" and .state == "uploaded")][0].browser_download_url // empty' <<<"$release_json")
+          asset_digest=$(jq -r '[.assets[]? | select(.name == "craft" and .state == "uploaded")][0].digest // empty' <<<"$release_json")
+          asset_size=$(jq -r '[.assets[]? | select(.name == "craft" and .state == "uploaded")][0].size // 0' <<<"$release_json")
+
+          expected_url="https://github.com/getsentry/craft/releases/download/${CRAFT_VERSION}/craft"
+          expected_digest="sha256:${CRAFT_SHA256}"
+          if [[ "$tag_name" != "$CRAFT_VERSION" || "$is_draft" != "false" || "$asset_url" != "$expected_url" || "$asset_digest" != "$expected_digest" || ! "$asset_size" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Craft release ${CRAFT_VERSION} is missing, mutable, or has an unexpected craft asset"
+            exit 1
+          fi
+
+          # Confirm the exact URL is currently downloadable. The reusable workflow otherwise
+          # treats a transient 404 as permission to fall back to the latest release.
+          curl --fail --silent --show-error --location --head "$expected_url" >/dev/null
+
+          echo "Craft ${CRAFT_VERSION} release and binary asset verified (${asset_size} bytes, ${asset_digest})."
+
   changelog-preview:
-    # The called workflow receives the scoped GITHUB_TOKEN automatically. Do not inherit
-    # repository and organization secrets into a pull_request_target job.
+    needs: verify-craft-release
+    # Pass only the scoped GITHUB_TOKEN. Do not inherit repository or organization secrets into
+    # a pull_request_target job.
     permissions:
       contents: read
       pull-requests: write
@@ -21,3 +64,5 @@ jobs:
       # Keep the downloaded Craft binary on the same immutable release as the workflow.
       # The called workflow otherwise defaults to the mutable latest release.
       craft-version: "2.27.0"
+    secrets:
+      GITHUB_TOKEN: ${{ github.token }}

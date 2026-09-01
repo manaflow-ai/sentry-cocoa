@@ -34,11 +34,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # This job detects if the PR contains changes that require running auto-update-tools.
-  # If yes, the job will output a flag that will be used by the next job to run the auto-update-tools.
-  # If no, the job will output a flag that will be used by the next job to skip running the auto-update-tools.
-  # At the end of this workflow, we run a check that validates that either auto_update_tools-required-check passed or were
-  # skipped, which is called auto_update_tools-required-check.
+  # This job detects if the PR contains changes that require tooling validation.
+  # The filter file is read from the trusted base revision above.
   files-changed:
     name: Detect File Changes
     runs-on: ubuntu-latest
@@ -141,11 +138,42 @@ jobs:
         uses: ./.github/actions/ci-diagnostics
         if: failure()
 
-  # This check validates that either auto-update-tools passed or was skipped, which allows us
-  # to make auto-update-tools a required check with only running the auto-update-tools when required.
-  # So, we don't have to run auto-update-tools, for example, for unrelated changes.
+  auto-update-tools-pr-validation:
+    name: Validate tooling versions (PR)
+    # Validate contributor changes only on an isolated, read-only GitHub-hosted runner. The
+    # write-capable updater above never executes for pull requests.
+    if: github.event_name == 'pull_request' && needs.files-changed.outputs.run_auto_update_tools_for_prs == 'true'
+    needs: files-changed
+    runs-on: macos-15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Tools
+        run: make init
+      - name: Update tooling versions
+        run: make update-versions
+      - name: Check tooling versions
+        run: make check-versions
+      - name: Print git status and changes
+        run: |
+          git status
+          git diff HEAD
+      - name: Run CI Diagnostics
+        uses: ./.github/actions/ci-diagnostics
+        if: failure()
+
+  # This check validates that the trusted updater or the read-only PR validation passed or was
+  # skipped, which lets the aggregate check remain required without running either job for
+  # unrelated changes.
   auto_update_tools-required-check:
-    needs: [files-changed, auto-update-tools]
+    needs: [files-changed, auto-update-tools, auto-update-tools-pr-validation]
     name: Auto Update Tools
     # This is necessary since a failed/skipped dependent job would cause this job to be skipped
     if: always()
