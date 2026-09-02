@@ -5,6 +5,13 @@ on:
       - main
   workflow_dispatch:
 
+# Benchmarking runs trusted source only. Credentials are stored in the dedicated `benchmarking`
+# environment, which must require Austin or Aziz's approval and allow only main and protected
+# release tags. No repository-level release credentials are used here.
+permissions:
+  actions: read # Download artifacts and invoke pinned actions.
+  contents: read # Read trusted benchmark source only.
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -12,11 +19,29 @@ concurrency:
 jobs:
   build-benchmark-test-target:
     name: Build App and Test Runner
+    # A tag dispatch is allowed only when the `benchmarking` environment's deployment rule also
+    # permits that protected tag. The script below enforces the SemVer shape fail-closed.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')))
     runs-on: macos-26
+    permissions:
+      actions: read # Download artifacts and invoke pinned actions.
+      contents: read # Read trusted benchmark source only.
+    environment: benchmarking
     steps:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify protected benchmark ref
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+        run: ./scripts/verify-benchmark-ref.sh
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
         with:
@@ -30,24 +55,48 @@ jobs:
       - run: make xcode-ci
       - name: Install Sentry CLI
         run: brew install getsentry/tools/sentry-cli
+      - name: Verify benchmark build credentials
+        env:
+          BENCHMARK_FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.BENCHMARK_FASTLANE_KEYCHAIN_PASSWORD }}
+          BENCHMARK_MATCH_GIT_PRIVATE_KEY: ${{ secrets.BENCHMARK_MATCH_GIT_PRIVATE_KEY }}
+          BENCHMARK_MATCH_PASSWORD: ${{ secrets.BENCHMARK_MATCH_PASSWORD }}
+          BENCHMARK_MATCH_USERNAME: ${{ secrets.BENCHMARK_MATCH_USERNAME }}
+          BENCHMARK_SENTRY_AUTH_TOKEN: ${{ secrets.BENCHMARK_SENTRY_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            BENCHMARK_FASTLANE_KEYCHAIN_PASSWORD \
+            BENCHMARK_MATCH_GIT_PRIVATE_KEY \
+            BENCHMARK_MATCH_PASSWORD \
+            BENCHMARK_MATCH_USERNAME \
+            BENCHMARK_SENTRY_AUTH_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing benchmarking environment secret: $name"
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
       - name: Build iOS-Swift for tests
         run: bundle exec fastlane build_ios_swift_for_tests
         env:
-          FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.FASTLANE_KEYCHAIN_PASSWORD }}
-          MATCH_GIT_PRIVATE_KEY: ${{ secrets.MATCH_GIT_PRIVATE_KEY }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_USERNAME: ${{ secrets.MATCH_USERNAME }}
+          FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.BENCHMARK_FASTLANE_KEYCHAIN_PASSWORD }}
+          MATCH_GIT_PRIVATE_KEY: ${{ secrets.BENCHMARK_MATCH_GIT_PRIVATE_KEY }}
+          MATCH_PASSWORD: ${{ secrets.BENCHMARK_MATCH_PASSWORD }}
+          MATCH_USERNAME: ${{ secrets.BENCHMARK_MATCH_USERNAME }}
       - name: Build iOS benchmark test
         run: bundle exec fastlane build_ios_benchmark_test
         env:
-          FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.FASTLANE_KEYCHAIN_PASSWORD }}
-          MATCH_GIT_PRIVATE_KEY: ${{ secrets.MATCH_GIT_PRIVATE_KEY }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_USERNAME: ${{ secrets.MATCH_USERNAME }}
+          FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.BENCHMARK_FASTLANE_KEYCHAIN_PASSWORD }}
+          MATCH_GIT_PRIVATE_KEY: ${{ secrets.BENCHMARK_MATCH_GIT_PRIVATE_KEY }}
+          MATCH_PASSWORD: ${{ secrets.BENCHMARK_MATCH_PASSWORD }}
+          MATCH_USERNAME: ${{ secrets.BENCHMARK_MATCH_USERNAME }}
 
       - name: Upload dSYMs
         env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.BENCHMARK_SENTRY_AUTH_TOKEN }}
         run: |
           sentry-cli upload-dif \
             --org sentry-sdks \
@@ -68,18 +117,44 @@ jobs:
 
   run-ui-tests-with-sauce:
     name: Run Benchmarks ${{matrix.suite}}
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')))
     runs-on: ubuntu-latest
     needs: build-benchmark-test-target
+    permissions:
+      actions: read # Download artifacts and invoke pinned actions.
+      contents: read # Read trusted benchmark source only.
+    environment: benchmarking
     strategy:
       fail-fast: false
       matrix:
         suite: ["High-end device", "Low-end device"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify protected benchmark ref
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+        run: ./scripts/verify-benchmark-ref.sh
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: benchmark-apps
-      - run: npm install -g saucectl@0.197.2
+      - run: npm install -g saucectl@0.197.2 # zizmor: ignore[adhoc-packages] pinned Sauce Labs CLI required by this job
+      - name: Verify Sauce credentials
+        env:
+          BENCHMARK_SAUCE_USERNAME: ${{ secrets.BENCHMARK_SAUCE_USERNAME }}
+          BENCHMARK_SAUCE_ACCESS_KEY: ${{ secrets.BENCHMARK_SAUCE_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BENCHMARK_SAUCE_USERNAME" || -z "$BENCHMARK_SAUCE_ACCESS_KEY" ]]; then
+            echo "::error::Missing benchmarking Sauce credentials"
+            exit 1
+          fi
       - name: Run Benchmarks in SauceLab
         id: run-benchmarks-in-sauce-lab
         uses: ./.github/actions/saucelabs-run
@@ -87,20 +162,20 @@ jobs:
           select-suite: ${{ matrix.suite }}
           config: .sauce/benchmarking-config.yml
           tags: benchmark
-          sauce-username: ${{ secrets.SAUCE_USERNAME }}
-          sauce-access-key: ${{ secrets.SAUCE_ACCESS_KEY }}
+          sauce-username: ${{ secrets.BENCHMARK_SAUCE_USERNAME }}
+          sauce-access-key: ${{ secrets.BENCHMARK_SAUCE_ACCESS_KEY }}
 
       - name: Should Retry Test
         id: should-retry-test
         if: ${{ always() && steps.run-benchmarks-in-sauce-lab.outcome == 'failure' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
-          SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
+          SAUCE_USERNAME: ${{ secrets.BENCHMARK_SAUCE_USERNAME }}
+          SAUCE_ACCESS_KEY: ${{ secrets.BENCHMARK_SAUCE_ACCESS_KEY }}
           TEST_ID: ${{ steps.run-benchmarks-in-sauce-lab.outputs.test_id }}
         with:
           script: |
-            const { execSync } = require('child_process');
+            const { execFileSync } = require('child_process');
             const testId = process.env.TEST_ID;
 
             if (!testId) {
@@ -113,7 +188,7 @@ jobs:
 
             try {
               console.log(`Checking if the test exists in SauceLabs: ${testId}`);
-              execSync(`saucectl jobs get ${testId}`, {
+              execFileSync('saucectl', ['jobs', 'get', testId], {
                 env: process.env,
                 stdio: 'inherit',
               });
@@ -134,8 +209,8 @@ jobs:
           config: .sauce/benchmarking-config.yml
           tags: benchmark
           warning-message: SauceLabs benchmark tests need to be retried
-          sauce-username: ${{ secrets.SAUCE_USERNAME }}
-          sauce-access-key: ${{ secrets.SAUCE_ACCESS_KEY }}
+          sauce-username: ${{ secrets.BENCHMARK_SAUCE_USERNAME }}
+          sauce-access-key: ${{ secrets.BENCHMARK_SAUCE_ACCESS_KEY }}
 
       - name: Run CI Diagnostics
         uses: ./.github/actions/ci-diagnostics
