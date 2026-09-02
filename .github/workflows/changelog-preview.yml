@@ -3,7 +3,7 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] base-only workflow with no PR code execution
     types: [opened, synchronize, reopened, edited, labeled]
 
-# Start from no token permissions. The job grants only checkout and PR-comment access.
+# Start from no token permissions. The job grants checkout and issue-comment access.
 permissions: {}
 
 # Serialize updates for one PR so an older run cannot overwrite a newer preview.
@@ -17,7 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read # Checkout PR metadata and changelog configuration.
-      pull-requests: write # Create or update one preview comment.
+      issues: write # The issue-comments API owns pull request comments.
+      pull-requests: read # Read pull request metadata used by Craft.
     steps:
       # pull_request_target runs this workflow from the base revision. Craft reads only this
       # trusted tree and fetches the PR metadata through GitHub's API; it never executes PR files.

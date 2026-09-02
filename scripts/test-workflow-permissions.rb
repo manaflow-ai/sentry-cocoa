@@ -49,6 +49,27 @@ if workflow_path.basename.to_s == 'validate-pr.yml'
   expected_token_permissions.each do |key, value|
     abort "GitHub App token input #{key} must be #{value.inspect}" unless token_inputs[key] == value
   end
+elsif workflow_path.basename.to_s == 'changelog-preview.yml'
+  changelog_job = jobs.fetch('changelog-preview')
+  expected_permissions = {
+    'contents' => 'read',
+    'issues' => 'write',
+    'pull-requests' => 'read'
+  }
+  unless changelog_job.fetch('permissions') == expected_permissions
+    abort "changelog-preview permissions must be #{expected_permissions.inspect}, got #{changelog_job.fetch('permissions').inspect}"
+  end
+
+  checkout = changelog_job.fetch('steps').find do |step|
+    step['uses'].to_s.start_with?('actions/checkout@')
+  end
+  abort 'changelog-preview must check out the base revision' unless checkout
+  checkout_inputs = checkout.fetch('with')
+  abort 'changelog-preview checkout must use the repository base SHA' unless checkout_inputs['ref'] == '${{ github.event.pull_request.base.sha }}'
+  abort 'changelog-preview checkout must use the base repository' unless checkout_inputs['repository'] == '${{ github.repository }}'
+  abort 'changelog-preview checkout must not persist credentials' unless checkout_inputs['persist-credentials'] == false
+
+  abort 'changelog-preview must not inherit secrets' if changelog_job.fetch('secrets', nil)
 else
   release_job = jobs.fetch('job_release')
   expected_permissions = {
