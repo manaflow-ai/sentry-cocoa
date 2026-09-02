@@ -3,7 +3,9 @@
 # Public API surface — also request a mobile SDK team review on API changes
 /sdk_api*.json @philipphofmann @philprime @noahsmartin @itaybre @NinjaLikesCheez @getsentry/team-mobile
 
-# CLA policy files require two trusted Manaflow maintainer approvals.
+# CODEOWNERS owners are an OR set. Branch protection must require both
+# trusted Manaflow maintainer approvals for CLA policy files.
+.github/CODEOWNERS @austinywang @azooz2003-bit
 .github/workflows/cla.yml @austinywang @azooz2003-bit
 .github/scripts/ @austinywang @azooz2003-bit
 signatures/ @austinywang @azooz2003-bit
