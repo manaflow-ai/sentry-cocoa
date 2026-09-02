@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read # Fetch the pinned validator source only.
       issues: write # The validator posts one advisory PR issue comment.
-      pull-requests: write # Read PR files and update its advisory comment.
+      pull-requests: read # Read PR files; comments use the issues permission.
     steps:
       # Fetch the validator at an immutable commit. This checkout contains no contributor code.
       - name: Checkout pinned validator
@@ -40,7 +40,7 @@ jobs:
           repositories: sentry-cocoa
           permission-issues: write
           permission-metadata: read
-          permission-pull-requests: write
+          permission-pull-requests: read
 
       - name: Validate PR
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
