@@ -63,13 +63,33 @@ on:
         required: false
         type: string
 
+    secrets:
+      FASTLANE_KEYCHAIN_PASSWORD:
+        required: false
+      MATCH_GIT_PRIVATE_KEY:
+        required: false
+      MATCH_PASSWORD:
+        required: false
+      MATCH_USERNAME:
+        required: false
+
+# Called jobs only need to download artifacts and read repository contents. Signing secrets are
+# supplied explicitly by trusted callers and do not change the token permissions.
+permissions: {}
+
 jobs:
   assemble-xcframework-variant:
     name: ${{ inputs.override-name || format('{0}{1}', inputs.scheme, inputs.suffix) }}
 
     runs-on: macos-15
+    permissions:
+      actions: read # Download artifacts and invoke local actions.
+      contents: read # Read source only; no repository writes.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Setup Ruby
         uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         if: ${{ inputs.signed }}
@@ -88,12 +108,13 @@ jobs:
       - name: Get version
         id: get-version
         env:
+          GITHUB_SHA: ${{ github.sha }}
           RELEASE_VERSION: ${{ inputs.release-version }}
         run: |
           if [ -n "$RELEASE_VERSION" ]; then
             echo "VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
           else
-            echo "VERSION=$(grep MARKETING_VERSION Sources/Configuration/Versioning.xcconfig | cut -d ' ' -f 3)+${{ github.sha }}" >> "$GITHUB_ENV"
+            echo "VERSION=$(grep MARKETING_VERSION Sources/Configuration/Versioning.xcconfig | cut -d ' ' -f 3)+$GITHUB_SHA" >> "$GITHUB_ENV"
           fi
         shell: sh
 
@@ -145,12 +166,12 @@ jobs:
           SUFFIX: ${{ inputs.suffix }}
         if: ${{ inputs.override-name != '' }}
         run: |
-          mv "${{env.SCHEME}}${{env.SUFFIX}}.xcframework" "${{env.OVERRIDE_NAME}}.xcframework"
+          mv "$SCHEME$SUFFIX.xcframework" "$OVERRIDE_NAME.xcframework"
         shell: bash
 
       - name: Validate XCFramework structure
         run: |
-          ./scripts/validate-xcframework.sh --xcframework "${{env.XCFRAMEWORK_NAME}}.xcframework"
+          ./scripts/validate-xcframework.sh --xcframework "$XCFRAMEWORK_NAME.xcframework"
         shell: bash
         env:
           XCFRAMEWORK_NAME: ${{ env.XCFRAMEWORK_NAME }}

@@ -1,14 +1,138 @@
 name: Changelog Preview
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] base-only workflow with no PR code execution
     types: [opened, synchronize, reopened, edited, labeled]
 
-permissions:
-  contents: read
-  pull-requests: write
-  statuses: write
+# Start from no token permissions. The job grants checkout and issue-comment access.
+permissions: {}
+
+# Serialize updates for one PR so an older run cannot overwrite a newer preview.
+concurrency:
+  group: changelog-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   changelog-preview:
-    uses: getsentry/craft/.github/workflows/changelog-preview.yml@667b5f5669552a35990a11ff6ac1131febb07446 # v2
-    secrets: inherit
+    name: Changelog Preview
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Checkout PR metadata and changelog configuration.
+      issues: write # The issue-comments API owns pull request comments.
+      pull-requests: read # Read pull request metadata used by Craft.
+    steps:
+      # pull_request_target runs this workflow from the base revision. Craft reads only this
+      # trusted tree and fetches the PR metadata through GitHub's API; it never executes PR files.
+      - name: Checkout base revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Verify base revision
+        shell: bash
+        env:
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          actual_base_sha=$(git rev-parse HEAD)
+          if [[ "$actual_base_sha" != "$EXPECTED_BASE_SHA" ]]; then
+            echo "::error::Checked out $actual_base_sha instead of trusted base $EXPECTED_BASE_SHA"
+            exit 1
+          fi
+
+      - name: Install pinned Craft
+        shell: bash
+        env:
+          CRAFT_VERSION: 2.30.1
+          CRAFT_SHA256: b28b71897f6d32cf8614df9b434f75aea766d35923020430906d09ad4fb87c05
+        run: |
+          set -euo pipefail
+          craft_path="$RUNNER_TEMP/craft"
+          curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
+            "https://github.com/getsentry/craft/releases/download/$CRAFT_VERSION/craft" \
+            --output "$craft_path"
+          printf '%s  %s\n' "$CRAFT_SHA256" "$craft_path" | sha256sum --check --status
+          chmod 0755 "$craft_path"
+          "$craft_path" --version
+
+      - name: Generate and publish preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CRAFT_BIN: ${{ runner.temp }}/craft
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || {
+            echo "::error::Invalid pull request number"
+            exit 1
+          }
+
+          craft_error_file="$RUNNER_TEMP/craft-changelog-error.log"
+          if ! result=$("$CRAFT_BIN" changelog --pr "$PR_NUMBER" --format json 2>"$craft_error_file"); then
+            echo '::error::Craft failed while generating the changelog preview.'
+            if [[ -s "$craft_error_file" ]]; then
+              sed -n '1,120{s/^/  /;p;}' "$craft_error_file"
+            fi
+            exit 1
+          fi
+          if ! jq -e 'type == "object"' >/dev/null <<<"$result"; then
+            echo '::error::Craft returned invalid changelog JSON.'
+            exit 1
+          fi
+
+          changelog=$(jq -r '.changelog // ""' <<<"$result")
+          bump_type=$(jq -r '.bumpType // "none"' <<<"$result")
+          pr_skipped=$(jq -r '.prSkipped // false' <<<"$result")
+          versioning_policy=$(jq -r '.versioningPolicy // "auto"' <<<"$result")
+
+          if [[ "$pr_skipped" == "true" ]]; then
+            changelog='_This PR will not appear in the changelog._'
+          elif [[ -z "$changelog" ]]; then
+            changelog='_No changelog entries will be generated from this PR._'
+          fi
+
+          if [[ "$versioning_policy" == "calver" ]]; then
+            bump_badge=''
+            section_heading='Changelog Preview'
+          else
+            case "$bump_type" in
+              major) bump_badge='🔴 **Major** (breaking changes)' ;;
+              minor) bump_badge='🟡 **Minor** (new features)' ;;
+              patch) bump_badge='🟢 **Patch** (bug fixes)' ;;
+              *) bump_badge='⚪ **None** (no version bump detected)' ;;
+            esac
+            section_heading='Semver Impact of This PR'
+          fi
+
+          comment_file=$(mktemp)
+          trap 'rm -f "$comment_file"' EXIT
+          {
+            printf '%s\n' '<!-- craft-changelog-preview -->'
+            printf '## %s\n\n' "$section_heading"
+            printf '%s\n\n' "$bump_badge"
+            printf '%s\n\n' '<details>'
+            printf '%s\n' '<summary>📋 Changelog Preview</summary>'
+            printf '%s\n' 'This is how your changes will appear in the changelog.'
+            printf '%s\n' 'Entries from this PR are highlighted with a left border (blockquote style).'
+            printf '\n%s\n\n' '---'
+            printf '%s\n\n' "$changelog"
+            printf '%s\n\n' '---'
+            printf '%s\n' '</details>'
+            printf '%s\n' '<sub>🤖 This preview updates automatically when you update the PR.</sub>'
+          } >"$comment_file"
+
+          comment_id=$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- craft-changelog-preview -->"))) | .id' \
+            | head -n 1 || true)
+          if [[ -n "$comment_id" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" \
+              -F "body=@$comment_file"
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              -F "body=@$comment_file"
+          fi

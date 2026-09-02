@@ -50,3 +50,20 @@ runs-on: ${{ inputs.run_on_cirrus_labs && fromJSON(format('["ghcr.io/cirruslabs/
 ```
 
 When `run_on_cirrus_labs` is `true`, this constructs the Cirrus Labs runner label array dynamically using the macOS version from the `runs-on` input. When `false`, it falls back to the standard GitHub-hosted runner label.
+
+## Benchmarking environment
+
+The benchmarking workflow runs trusted source only. It accepts pushes to `main` and manual runs on
+`main` or a SemVer release tag. Configure a GitHub environment named `benchmarking` before enabling
+the workflow:
+
+- Require approval from the trusted Austin or Aziz reviewer group.
+- Allow deployments only from `main` and protected SemVer release tags.
+- Store only these environment secrets, with no repository-level fallbacks:
+  `BENCHMARK_FASTLANE_KEYCHAIN_PASSWORD`, `BENCHMARK_MATCH_GIT_PRIVATE_KEY`,
+  `BENCHMARK_MATCH_PASSWORD`, `BENCHMARK_MATCH_USERNAME`, `BENCHMARK_SENTRY_AUTH_TOKEN`,
+  `BENCHMARK_SAUCE_USERNAME`, and `BENCHMARK_SAUCE_ACCESS_KEY`.
+
+The workflow checks every required value before using it and rejects non-release refs. Keep tag
+creation restricted to trusted maintainers, because a protected environment cannot make an
+unprotected tag trustworthy.

@@ -1,16 +1,54 @@
 name: Validate PR
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] base-only workflow, no PR checkout
     types: [opened, reopened]
+
+# pull_request_target loads this workflow from the base repository's default branch. This job
+# checks out only a pinned validator and never executes files from the pull request.
+permissions: {}
+
+concurrency:
+  group: validate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   validate-pr:
+    name: Validate PR contribution policy
     runs-on: ubuntu-24.04
     permissions:
-      pull-requests: write
+      contents: read # Fetch the pinned validator source only.
+      issues: write # The validator posts one advisory PR issue comment.
+      pull-requests: read # Read PR files; comments use the issues permission.
     steps:
-      - uses: getsentry/github-workflows/validate-pr@607fed74f812e69201531a5185b6c3c57caa4e89 # v3
+      # Fetch the validator at an immutable commit. This checkout contains no contributor code.
+      - name: Checkout pinned validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: getsentry/github-workflows
+          ref: 607fed74f812e69201531a5185b6c3c57caa4e89
+          path: .ci/vendor/validate-pr
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Generate scoped maintainer token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.SDK_MAINTAINER_BOT_APP_ID }}
           private-key: ${{ secrets.SDK_MAINTAINER_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: sentry-cocoa
+          permission-issues: write
+          permission-metadata: read
+          permission-pull-requests: read
+
+      - name: Validate PR
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const validate = require('./.ci/vendor/validate-pr/validate-pr/scripts/validate-pr.js');
+            await validate({ github, context, core });

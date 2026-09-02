@@ -22,6 +22,14 @@ on:
         description: Target branch to merge into. Uses the default branch as a fallback (optional)
         required: false
 
+# All pull-request jobs run with read-only access. Signing and release credentials are passed only
+# to the explicit release inputs below, and only for push or manually dispatched release branches.
+permissions:
+  actions: read # Download artifacts and invoke local actions.
+  contents: read # Read source and filter configuration.
+  issues: read # Read release-blocker issue state.
+  pull-requests: read # Read PR metadata for release gates.
+
 # Concurrency configuration:
 # - We use workflow-specific concurrency groups to prevent multiple release builds from running
 #   simultaneously, which could lead to race conditions in artifact generation and storage.
@@ -46,10 +54,14 @@ jobs:
     needs: run-full-ci-gate
     outputs:
       run_release_for_prs: ${{ steps.changes.outputs.run_release_for_prs }}
-      is_dependabot: ${{ github.actor == 'dependabot[bot]' }}
-      is_fork: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Read filters from the base revision so a PR cannot change the paths that enable
+          # expensive or credential-bearing jobs.
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -58,11 +70,15 @@ jobs:
           filters: .github/file-filters.yml
 
   setup-matrix:
+    name: Setup release matrix
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || needs.files-changed.outputs.run_release_for_prs == 'true'
     needs: files-changed
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Setup matrix combinations
         id: setup-matrix-combinations
         run: |
@@ -99,14 +115,20 @@ jobs:
     if: github.event_name != 'pull_request' || needs.files-changed.outputs.run_release_for_prs == 'true'
     name: Assemble XCFramework Variant
     uses: ./.github/workflows/assemble-xcframework-variant.yml
-    secrets: inherit
+    # Pass signing material only on the two release events and the two release branches. The
+    # empty value on pull requests is intentional, so a called workflow cannot access secrets.
+    secrets:
+      FASTLANE_KEYCHAIN_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.FASTLANE_KEYCHAIN_PASSWORD || '' }}
+      MATCH_GIT_PRIVATE_KEY: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_GIT_PRIVATE_KEY || '' }}
+      MATCH_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_PASSWORD || '' }}
+      MATCH_USERNAME: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_USERNAME || '' }}
     with:
       scheme: ${{matrix.variant.scheme}}
       suffix: ${{matrix.variant.suffix}}
       configuration-suffix: ${{matrix.variant.configuration-suffix}}
       variant-id: ${{matrix.variant.id}}
       # Only sign the XCFramework on releases
-      signed: ${{ github.event_name != 'pull_request' }}
+      signed: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') }}
       release-version: ${{ github.event.inputs.version }}
       excluded-archs: ${{matrix.variant.excluded-archs}}
       override-name: ${{matrix.variant.override-name}}
@@ -129,9 +151,13 @@ jobs:
     if: github.event_name != 'pull_request' || needs.files-changed.outputs.run_release_for_prs == 'true'
     needs: [files-changed, build-sentryobjc-slices, setup-matrix]
     uses: ./.github/workflows/assemble-sentryobjc-static-xcframework.yml
-    secrets: inherit
+    secrets:
+      FASTLANE_KEYCHAIN_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.FASTLANE_KEYCHAIN_PASSWORD || '' }}
+      MATCH_GIT_PRIVATE_KEY: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_GIT_PRIVATE_KEY || '' }}
+      MATCH_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_PASSWORD || '' }}
+      MATCH_USERNAME: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_USERNAME || '' }}
     with:
-      signed: ${{ github.event_name != 'pull_request' }}
+      signed: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') }}
       release-version: ${{ github.event.inputs.version }}
       sdks: ${{ needs.setup-matrix.outputs.sdk-list-string }}
 
@@ -140,9 +166,13 @@ jobs:
     if: github.event_name != 'pull_request' || needs.files-changed.outputs.run_release_for_prs == 'true'
     needs: [files-changed, build-sentryobjc-slices, setup-matrix]
     uses: ./.github/workflows/assemble-sentryobjc-dynamic-xcframework.yml
-    secrets: inherit
+    secrets:
+      FASTLANE_KEYCHAIN_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.FASTLANE_KEYCHAIN_PASSWORD || '' }}
+      MATCH_GIT_PRIVATE_KEY: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_GIT_PRIVATE_KEY || '' }}
+      MATCH_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_PASSWORD || '' }}
+      MATCH_USERNAME: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') && secrets.MATCH_USERNAME || '' }}
     with:
-      signed: ${{ github.event_name != 'pull_request' }}
+      signed: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x') }}
       release-version: ${{ github.event.inputs.version }}
       sdks: ${{ needs.setup-matrix.outputs.sdk-list-string }}
 
@@ -162,6 +192,9 @@ jobs:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: xcframework-${{github.sha}}-*
@@ -216,24 +249,29 @@ jobs:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: xcframework-${{github.sha}}-*
           merge-multiple: true
       - name: Prepare Package.swift
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
           ./scripts/prepare-package.sh \
             --package-file Package.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.1.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.2.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
@@ -261,24 +299,29 @@ jobs:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: xcframework-${{github.sha}}-*
           merge-multiple: true
       - name: Prepare Package.swift
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
           ./scripts/prepare-package.sh \
             --package-file Package.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.1.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.2.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
@@ -306,24 +349,29 @@ jobs:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: xcframework-${{github.sha}}-*
           merge-multiple: true
       - name: Prepare Package.swift
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
           ./scripts/prepare-package.sh \
             --package-file Package.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.1.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.2.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
@@ -350,24 +398,29 @@ jobs:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: xcframework-${{github.sha}}-*
           merge-multiple: true
       - name: Prepare Package.swift
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
           ./scripts/prepare-package.sh \
             --package-file Package.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.1.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
           ./scripts/prepare-package.sh \
             --package-file Package@swift-6.2.swift \
-            --is-pr "${{ github.event_name == 'pull_request' }}" \
+            --is-pr "$IS_PR" \
             --change-path true
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
@@ -401,23 +454,24 @@ jobs:
     name: Collect App Metrics
     runs-on: macos-15
     needs: [files-changed, assemble-xcframework-variant]
-    # Run for PRs with related changes (including dependabot) or non-PR events. Skip fork PRs (no secrets available).
-    if: |
-      github.event_name != 'pull_request' || (
-        needs.files-changed.outputs.run_release_for_prs == 'true' &&
-        needs.files-changed.outputs.is_fork != 'true' && (
-          contains(
-          fromJson('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'),
-          github.event.pull_request.author_association
-        ) ||
-        needs.files-changed.outputs.is_dependabot == 'true')
-      )
+    # Fastlane and Sauce credentials are never exposed to pull requests. This job runs only on
+    # release events and branches.
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x')
+    permissions:
+      actions: read # Download artifacts and invoke local actions.
+      contents: read # Read source for metrics builds only.
+    environment: release
     timeout-minutes: 20
     steps:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - name: Git checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
         with:
@@ -432,13 +486,9 @@ jobs:
         with:
           path: Tests/Perf/test-app-plain.ipa
           key: ${{ github.workflow }}-${{ github.job }}-appplain-${{ hashFiles('fastlane/Fastfile', 'Tests/Perf/test-app-plain/**') }}
-      # When running the workflows for dependabot PRs, we need to skip code signing, because the code signing secrets are not available for dependabot PRs.
-      # We still want to run as much of the full workflow as possible, to verify the behaviour.
       - name: Build test app plain
         if: steps.app-plain-cache.outputs['cache-hit'] != 'true'
-        run: |
-          bundle exec fastlane build_perf_test_app_plain \
-            skip_codesigning:${{ needs.files-changed.outputs.is_dependabot == 'true' }}
+        run: bundle exec fastlane build_perf_test_app_plain
         env:
           FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.FASTLANE_KEYCHAIN_PASSWORD }}
           MATCH_GIT_PRIVATE_KEY: ${{ secrets.MATCH_GIT_PRIVATE_KEY }}
@@ -450,25 +500,18 @@ jobs:
           path: XCFrameworkBuildPath/
       - run: find XCFrameworkBuildPath -name "Sentry-Dynamic.xcframework.zip" -print0 | xargs -t0I @ unzip @ -d XCFrameworkBuildPath
       - name: Build test app with sentry
-        run: |
-          bundle exec fastlane build_perf_test_app_sentry \
-            skip_codesigning:${{ needs.files-changed.outputs.is_dependabot == 'true' }}
+        run: bundle exec fastlane build_perf_test_app_sentry
         env:
           FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.FASTLANE_KEYCHAIN_PASSWORD }}
           MATCH_GIT_PRIVATE_KEY: ${{ secrets.MATCH_GIT_PRIVATE_KEY }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_USERNAME: ${{ secrets.MATCH_USERNAME }}
       - name: Collect app metrics
-        if: needs.files-changed.outputs.is_dependabot != 'true'
         uses: getsentry/action-app-sdk-overhead-metrics@44fb5489ac4ac252c87d84811972dc93a1e490b8
         with:
           config: Tests/Perf/metrics-test.yml
           sauce-user: ${{ secrets.SAUCE_USERNAME }}
           sauce-key: ${{ secrets.SAUCE_ACCESS_KEY }}
-      - name: App metrics collection skipped
-        if: needs.files-changed.outputs.is_dependabot == 'true'
-        run: |
-          echo "::warning::App metrics collection was SKIPPED ON PURPOSE for dependabot PR. Code signing secrets are not available for dependabot PRs."
       - name: Run CI Diagnostics
         uses: ./.github/actions/ci-diagnostics
         if: ${{ failure() || cancelled() }}
@@ -476,6 +519,10 @@ jobs:
   job_release:
     runs-on: ubuntu-latest
     name: "Release New Version"
+    permissions:
+      actions: read # Download artifacts and invoke local actions.
+      contents: read # The scoped app token performs release writes.
+    environment: release
     needs:
       [
         files-changed,
@@ -488,7 +535,11 @@ jobs:
         assemble-sentryobjc-static-xcframework,
         assemble-sentryobjc-dynamic-xcframework,
       ]
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    # A manual release must come from an allowlisted release branch. Configure the release
+    # environment with required reviewers before enabling production releases.
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x')
     steps:
       - name: Get auth token
         id: token
@@ -496,11 +547,16 @@ jobs:
         with:
           app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          repositories: sentry-cocoa
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
       - name: Check out current commit (${{ github.sha }})
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ steps.token.outputs.token }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -510,9 +566,11 @@ jobs:
 
       - name: Create apple-binaries archive
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
         run: |
           ./scripts/create-apple-binaries-archive.sh \
-            --version "${{ github.event.inputs.version }}" \
+            --version "$RELEASE_VERSION" \
             --xcframework-dir XCFrameworkBuildPath \
             --output-dir XCFrameworkBuildPath
 
