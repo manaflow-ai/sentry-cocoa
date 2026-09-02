@@ -71,12 +71,17 @@ jobs:
             exit 1
           }
 
-          set +e
-          result=$("$CRAFT_BIN" changelog --pr "$PR_NUMBER" --format json 2>/dev/null)
-          craft_status=$?
-          set -e
-          if (( craft_status != 0 )) || ! jq -e . >/dev/null <<<"$result"; then
-            result='{"changelog":"","bumpType":null}'
+          craft_error_file="$RUNNER_TEMP/craft-changelog-error.log"
+          if ! result=$("$CRAFT_BIN" changelog --pr "$PR_NUMBER" --format json 2>"$craft_error_file"); then
+            echo '::error::Craft failed while generating the changelog preview.'
+            if [[ -s "$craft_error_file" ]]; then
+              sed -n '1,120{s/^/  /;p;}' "$craft_error_file"
+            fi
+            exit 1
+          fi
+          if ! jq -e 'type == "object"' >/dev/null <<<"$result"; then
+            echo '::error::Craft returned invalid changelog JSON.'
+            exit 1
           fi
 
           changelog=$(jq -r '.changelog // ""' <<<"$result")
