@@ -23,7 +23,7 @@ fi
 # Validate plain SemVer tags without relying on a permissive expression. Core and numeric
 # prerelease identifiers cannot have leading zeroes; all identifiers must be non-empty.
 is_valid_semver_tag() {
-  local tag=$1
+  local tag=${SEMVER_TAG:-}
   local core_and_prerelease=${tag#refs/tags/}
   local core=$core_and_prerelease
   local prerelease=''
@@ -65,7 +65,8 @@ is_valid_semver_tag() {
 }
 
 # Sentry release tags are plain SemVer tags, for example 9.24.0 or 9.24.0-rc.1.
-if is_valid_semver_tag "$ref"; then
+SEMVER_TAG=$ref
+if is_valid_semver_tag; then
   exit 0
 fi
 
