@@ -521,9 +521,7 @@ jobs:
     name: "Release New Version"
     permissions:
       actions: read # Download artifacts and invoke local actions.
-      contents: write # Craft commits the trusted release update.
-      issues: write # Craft updates release issue metadata.
-      pull-requests: write # Craft updates release PR metadata.
+      contents: read # The scoped app token performs release writes.
     environment: release
     needs:
       [
