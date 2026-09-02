@@ -7,6 +7,12 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
+# Pull requests run an unsigned build with read-only access. Sentry upload and signing keys are
+# available only to the trusted main-branch job.
+permissions:
+  contents: read # Read source and filter configuration.
+  pull-requests: read # Read PR metadata for path filters.
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -22,10 +28,14 @@ jobs:
     needs: run-full-ci-gate
     outputs:
       run_size_analysis_for_prs: ${{ steps.changes.outputs.run_size_analysis_for_prs }}
-      is_dependabot: ${{ github.actor == 'dependabot[bot]' }}
-      is_fork: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Read filters from the base revision so a PR cannot change the decision to run the
+          # workflow.
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -33,46 +43,25 @@ jobs:
           token: ${{ github.token }}
           filters: .github/file-filters.yml
 
-  skip-size-analysis-for-non-contributors:
-    name: Skip Size Analysis for Non-Contributors
-    runs-on: ubuntu-latest
-    needs: files-changed
-    # Skip for non-contributors or fork PRs, but not for dependabot (handled in build)
-    if: |
-      github.event_name == 'pull_request' &&
-      needs.files-changed.outputs.run_size_analysis_for_prs == 'true' &&
-      (
-        !contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.pull_request.author_association) ||
-        needs.files-changed.outputs.is_fork == 'true'
-      ) &&
-      needs.files-changed.outputs.is_dependabot == 'false'
-    steps:
-      - name: Skip Size Analysis for Non-Contributors
-        run: |
-          echo "Skipping size analysis for non-contributors"
-          exit 0
-
   build:
     name: Build and Analyze SDK Size
     runs-on: macos-26
-    # Run for PRs with related changes (including dependabot) or non-PR events.
-    if: |
-      github.event_name != 'pull_request' || (
-        needs.files-changed.outputs.run_size_analysis_for_prs == 'true' &&
-        needs.files-changed.outputs.is_fork != 'true' && (
-          contains(
-          fromJson('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'),
-          github.event.pull_request.author_association
-        ) ||
-        needs.files-changed.outputs.is_dependabot == 'true')
-      )
+    # This job can sign and upload only from the protected main branch. Pull requests use the
+    # separate unsigned job below, including same-repository contributor PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: files-changed
+    permissions:
+      contents: read # Read source and invoke build tooling only.
+    environment: release
     timeout-minutes: 20
     steps:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
         with:
@@ -94,12 +83,8 @@ jobs:
 
       - run: make xcode-ci
 
-      # When running the workflows for dependabot PRs, we need to skip code signing, because the code signing secrets are not available for dependabot PRs.
-      # We still want to run as much of the full workflow as possible, to verify the behaviour.
       - name: Build and Upload for Size Analysis
-        run: |
-          bundle exec fastlane build_ios_for_size_analysis \
-            skip_codesigning:${{ needs.files-changed.outputs.is_dependabot == 'true' }}
+        run: bundle exec fastlane build_ios_for_size_analysis
         env:
           FASTLANE_BUNDLE_VERSION: ${{ github.run_number }}
           FASTLANE_KEYCHAIN_PASSWORD: ${{ secrets.FASTLANE_KEYCHAIN_PASSWORD }}
@@ -112,13 +97,54 @@ jobs:
         uses: ./.github/actions/ci-diagnostics
         if: failure()
 
+  build-pr:
+    name: Build SDK Size (PR)
+    # Build contributor code without signing or upload credentials. The lane skips its Sentry
+    # upload when codesigning is disabled.
+    if: github.event_name == 'pull_request' && needs.files-changed.outputs.run_size_analysis_for_prs == 'true'
+    needs: files-changed
+    runs-on: macos-26
+    permissions:
+      contents: read # Read contributor source for unsigned validation.
+      pull-requests: read # Read PR metadata for the base filter.
+    steps:
+      - name: Warm CoreSimulator
+        run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Xcode
+        uses: ./.github/actions/setup-xcode
+        with:
+          version: "26"
+          resolve-simulators: "false"
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          bundler-cache: true
+      - run: make init-ci-build
+      - name: Make Sentry Static
+        run: echo "MACH_O_TYPE = staticlib" >> Sources/Configuration/Sentry.xcconfig
+      - run: make xcode-ci
+      - name: Build without signing
+        env:
+          FASTLANE_BUNDLE_VERSION: ${{ github.run_number }}
+        run: bundle exec fastlane build_ios_for_size_analysis skip_codesigning:true
+      - name: Run CI Diagnostics
+        uses: ./.github/actions/ci-diagnostics
+        if: failure()
+
   build-required-check:
     needs:
       [
         run-full-ci-gate,
         files-changed,
         build,
-        skip-size-analysis-for-non-contributors,
+        build-pr,
       ]
     name: Size Analysis
     # This is necessary since a failed/skipped dependent job would cause this job to be skipped

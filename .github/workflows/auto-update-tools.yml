@@ -13,14 +13,11 @@ on:
   workflow_dispatch:
   pull_request:
 
-# Permissions configuration:
-# - 'contents: write' is required to allow the workflow to commit changes to the repository
-#   when updating the tooling version files and creating branches for pull requests.
-# - 'pull-requests: write' is required to allow the workflow to create pull requests
-#   using the peter-evans/create-pull-request action when tooling version updates are available.
+# Pull requests only validate their proposed tooling changes. The write-capable updater is
+# restricted to the allowlisted default branch and receives an app token only on trusted events.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read # Read source and filter configuration.
+  pull-requests: read # Read PR metadata for path filters.
 
 # Concurrency configuration:
 # - For pull requests, we use a workflow-and-ref–scoped group to keep runs isolated per PR while
@@ -36,11 +33,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # This job detects if the PR contains changes that require running auto-update-tools.
-  # If yes, the job will output a flag that will be used by the next job to run the auto-update-tools.
-  # If no, the job will output a flag that will be used by the next job to skip running the auto-update-tools.
-  # At the end of this workflow, we run a check that validates that either auto_update_tools-required-check passed or were
-  # skipped, which is called auto_update_tools-required-check.
+  # This job reads the trusted filter file and reports whether a pull request needs validation.
   files-changed:
     name: Detect File Changes
     runs-on: ubuntu-latest
@@ -49,6 +42,12 @@ jobs:
       run_auto_update_tools_for_prs: ${{ steps.changes.outputs.run_auto_update_tools_for_prs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Read filters from the base revision. A pull request must not be able to change the
+          # paths that decide whether a write-capable job runs.
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -57,22 +56,37 @@ jobs:
           filters: .github/file-filters.yml
 
   auto-update-tools:
-    if: github.event_name != 'pull_request' || needs.files-changed.outputs.run_auto_update_tools_for_prs == 'true'
+    name: Update tooling versions
+    # The updater changes the repository and opens pull requests. Keep it on main for both the
+    # scheduled run and manual recovery runs. A pull request never reaches this job.
+    if: >-
+      (github.event_name == 'schedule' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: files-changed
     runs-on: macos-15
+    permissions:
+      contents: read # Checkout source; the scoped app token performs writes.
+      pull-requests: read # Read metadata; the scoped app token opens PRs.
+    # Configure this environment with required reviewers before enabling scheduled updates.
+    environment: release-automation
     steps:
       - name: Generate GitHub App Token
         id: app_token
-        if: github.event_name != 'pull_request'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.SENTRY_DEPENDENCY_UPDATER_GITHUB_APP_ID }}
           private-key: ${{ secrets.SENTRY_DEPENDENCY_UPDATER_GITHUB_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: sentry-cocoa
+          permission-contents: write
+          permission-pull-requests: write
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ github.event_name != 'pull_request' && steps.app_token.outputs.token || github.token }}
+          token: ${{ steps.app_token.outputs.token }}
+          ref: refs/heads/main
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Tools
         run: make init
@@ -131,11 +145,42 @@ jobs:
         uses: ./.github/actions/ci-diagnostics
         if: failure()
 
-  # This check validates that either auto-update-tools passed or was skipped, which allows us
-  # to make auto-update-tools a required check with only running the auto-update-tools when required.
-  # So, we don't have to run auto-update-tools, for example, for unrelated changes.
+  auto-update-tools-pr-validation:
+    name: Validate tooling versions (PR)
+    # This job intentionally runs contributor code without repository secrets. It provides useful
+    # feedback for matching pull requests while the updater above remains unreachable.
+    if: github.event_name == 'pull_request' && needs.files-changed.outputs.run_auto_update_tools_for_prs == 'true'
+    needs: files-changed
+    runs-on: macos-15
+    permissions:
+      contents: read # Read contributor source for validation only.
+      pull-requests: read # Read PR metadata for the base filter.
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Tools
+        run: make init
+      - name: Update tooling versions
+        run: make update-versions
+      - name: Check tooling versions
+        run: make check-versions
+      - name: Print git status and changes
+        run: |
+          git status
+          git diff HEAD
+      - name: Run CI Diagnostics
+        uses: ./.github/actions/ci-diagnostics
+        if: failure()
+
+  # Keep one stable required check. Skipped event-specific jobs are acceptable; failures and
+  # cancellations are propagated.
   auto_update_tools-required-check:
-    needs: [files-changed, auto-update-tools]
+    needs: [files-changed, auto-update-tools, auto-update-tools-pr-validation]
     name: Auto Update Tools
     # This is necessary since a failed/skipped dependent job would cause this job to be skipped
     if: always()
@@ -144,6 +189,10 @@ jobs:
       # If any jobs we depend on fails gets cancelled or times out, this job will fail.
       # Skipped jobs are not considered failures.
       - name: Check for failures
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        if: >-
+          needs.files-changed.result == 'failure' || needs.files-changed.result == 'cancelled' ||
+          needs.auto-update-tools.result == 'failure' || needs.auto-update-tools.result == 'cancelled' ||
+          needs.auto-update-tools-pr-validation.result == 'failure' ||
+          needs.auto-update-tools-pr-validation.result == 'cancelled'
         run: |
           echo "One of the auto-update-tools jobs has failed." && exit 1

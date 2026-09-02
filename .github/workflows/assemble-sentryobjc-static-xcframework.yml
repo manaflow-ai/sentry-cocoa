@@ -23,15 +23,35 @@ on:
         required: false
         type: string
 
+    secrets:
+      FASTLANE_KEYCHAIN_PASSWORD:
+        required: false
+      MATCH_GIT_PRIVATE_KEY:
+        required: false
+      MATCH_PASSWORD:
+        required: false
+      MATCH_USERNAME:
+        required: false
+
+# Called jobs only need to download artifacts and read repository contents. Signing secrets are
+# supplied explicitly by trusted callers and do not change the token permissions.
+permissions: {}
+
 jobs:
   assemble-sentryobjc-static-xcframework:
     name: SentryObjC-Static
     runs-on: macos-26
+    permissions:
+      actions: read # Download artifacts and invoke local actions.
+      contents: read # Read source only; no repository writes.
 
     steps:
       - name: Warm CoreSimulator
         run: xcrun simctl list runtimes -j > /dev/null 2>&1 &
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Setup Xcode
         uses: ./.github/actions/setup-xcode
         with:
