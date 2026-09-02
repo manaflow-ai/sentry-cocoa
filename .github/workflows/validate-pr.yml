@@ -4,7 +4,8 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] base-only workflow, no PR checkout
     types: [opened, reopened]
 
-# This workflow runs from the base revision and never executes files from the pull request.
+# pull_request_target loads this workflow from the base repository's default branch. This job
+# checks out only a pinned validator and never executes files from the pull request.
 permissions: {}
 
 concurrency:

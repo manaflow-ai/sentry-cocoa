@@ -46,6 +46,8 @@ if workflow_path.basename.to_s == 'validate-pr.yml'
     'permission-metadata' => 'read',
     'permission-pull-requests' => 'read'
   }
+  unexpected_permissions = token_inputs.keys.grep(/\Apermission-/) - expected_token_permissions.keys
+  abort "GitHub App token has unexpected permission inputs: #{unexpected_permissions.inspect}" unless unexpected_permissions.empty?
   expected_token_permissions.each do |key, value|
     abort "GitHub App token input #{key} must be #{value.inspect}" unless token_inputs[key] == value
   end
@@ -70,6 +72,9 @@ elsif workflow_path.basename.to_s == 'changelog-preview.yml'
   abort 'changelog-preview checkout must not persist credentials' unless checkout_inputs['persist-credentials'] == false
 
   abort 'changelog-preview must not inherit secrets' if changelog_job.fetch('secrets', nil)
+  publish_step = changelog_job.fetch('steps').find { |step| step['name'] == 'Generate and publish preview' }
+  publish_run = publish_step&.fetch('run', '')
+  abort 'changelog-preview must restrict marker updates to the Actions bot' unless publish_run&.include?('github-actions[bot]')
 else
   release_job = jobs.fetch('job_release')
   expected_permissions = {
@@ -78,6 +83,12 @@ else
   }
   unless release_job.fetch('permissions') == expected_permissions
     abort "job_release permissions must be #{expected_permissions.inspect}, got #{release_job.fetch('permissions').inspect}"
+  end
+
+  expected_release_condition = "github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v8.x')"
+  actual_release_condition = release_job.fetch('if').to_s.gsub(/\s+/, ' ').strip
+  unless actual_release_condition == expected_release_condition
+    abort "job_release must be limited to #{expected_release_condition.inspect}, got #{actual_release_condition.inspect}"
   end
 
   abort 'job_release must use the release environment' unless release_job['environment'] == 'release'
@@ -94,6 +105,8 @@ else
     'permission-pull-requests' => 'write'
   }
 
+  unexpected_permissions = token_inputs.keys.grep(/\Apermission-/) - expected_token_permissions.keys
+  abort "GitHub App token has unexpected permission inputs: #{unexpected_permissions.inspect}" unless unexpected_permissions.empty?
   expected_token_permissions.each do |key, value|
     abort "GitHub App token input #{key} must be #{value.inspect}" unless token_inputs[key] == value
   end

@@ -127,7 +127,7 @@ jobs:
 
           comment_id=$(gh api --paginate \
             "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.body | contains("<!-- craft-changelog-preview -->")) | .id' \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- craft-changelog-preview -->"))) | .id' \
             | head -n 1 || true)
           if [[ -n "$comment_id" ]]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" \
