@@ -19,25 +19,27 @@ jobs:
       contents: read # Checkout PR metadata and changelog configuration.
       pull-requests: write # Create or update one preview comment.
     steps:
-      # pull_request_target runs this workflow from the base revision. Keep the contributor tree
-      # in a separate directory and execute only the inline, reviewed commands below.
-      - name: Checkout PR merge ref
-        id: checkout-merge
-        continue-on-error: true
+      # pull_request_target runs this workflow from the base revision. Craft reads only this
+      # trusted tree and fetches the PR metadata through GitHub's API; it never executes PR files.
+      - name: Checkout base revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ github.repository }}
           fetch-depth: 0
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
-          path: pr
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
-      - name: Checkout PR head ref
-        if: steps.checkout-merge.outcome == 'failure'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: pr
-          persist-credentials: false
+
+      - name: Verify base revision
+        shell: bash
+        env:
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          actual_base_sha=$(git rev-parse HEAD)
+          if [[ "$actual_base_sha" != "$EXPECTED_BASE_SHA" ]]; then
+            echo "::error::Checked out $actual_base_sha instead of trusted base $EXPECTED_BASE_SHA"
+            exit 1
+          fi
 
       - name: Install pinned Craft
         shell: bash
@@ -56,7 +58,6 @@ jobs:
 
       - name: Generate and publish preview
         shell: bash
-        working-directory: pr
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
